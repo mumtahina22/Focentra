@@ -1,0 +1,61 @@
+// lib/theme/light_theme.dart
+import 'package:flutter/material.dart';
+
+/// Light [ColorScheme] made with FlexColorScheme v8.3.0.
+/// Requires Flutter 3.22.0 or later.
+const ColorScheme lightColorScheme = ColorScheme(
+  brightness: Brightness.light,
+  primary: Color(0xFF1565C0),
+  onPrimary: Color(0xFFFFFFFF),
+  primaryContainer: Color(0xFF90CAF9),
+  onPrimaryContainer: Color(0xFF000000),
+  primaryFixed: Color(0xFFC5DDF8),
+  primaryFixedDim: Color(0xFF97BEE9),
+  onPrimaryFixed: Color(0xFF08274A),
+  onPrimaryFixedVariant: Color(0xFF0A2F5A),
+  secondary: Color(0xFF039BE5),
+  onSecondary: Color(0xFFFFFFFF),
+  secondaryContainer: Color(0xFFCBE6FF),
+  onSecondaryContainer: Color(0xFF000000),
+  secondaryFixed: Color(0xFFC3EBFE),
+  secondaryFixedDim: Color(0xFF8ED5F9),
+  onSecondaryFixed: Color(0xFF013F5D),
+  onSecondaryFixedVariant: Color(0xFF014B6F),
+  tertiary: Color(0xFF0277BD),
+  onTertiary: Color(0xFFFFFFFF),
+  tertiaryContainer: Color(0xFFBEDCFF),
+  onTertiaryContainer: Color(0xFF000000),
+  tertiaryFixed: Color(0xFFC0E4F9),
+  tertiaryFixedDim: Color(0xFF8DC9EC),
+  onTertiaryFixed: Color(0xFF012941),
+  onTertiaryFixedVariant: Color(0xFF013553),
+  error: Color(0xFFB00020),
+  onError: Color(0xFFFFFFFF),
+  errorContainer: Color(0xFFFCD9DF),
+  onErrorContainer: Color(0xFF000000),
+  surface: Color(0xFFFCFCFC),
+  onSurface: Color(0xFF111111),
+  surfaceDim: Color(0xFFE0E0E0),
+  surfaceBright: Color(0xFFFDFDFD),
+  surfaceContainerLowest: Color(0xFFFFFFFF),
+  surfaceContainerLow: Color(0xFFF8F8F8),
+  surfaceContainer: Color(0xFFF3F3F3),
+  surfaceContainerHigh: Color(0xFFEDEDED),
+  surfaceContainerHighest: Color(0xFFE7E7E7),
+  onSurfaceVariant: Color(0xFF393939),
+  outline: Color(0xFF919191),
+  outlineVariant: Color(0xFFD1D1D1),
+  shadow: Color(0xFF000000),
+  scrim: Color(0xFF000000),
+  inverseSurface: Color(0xFF2A2A2A),
+  onInverseSurface: Color(0xFFF1F1F1),
+  inversePrimary: Color(0xFFAEDFFF),
+  surfaceTint: Color(0xFF1565C0),
+);
+
+/// Wrap [ColorScheme] into [ThemeData] so it can be passed to MaterialApp
+final ThemeData lightTheme = ThemeData(
+  colorScheme: lightColorScheme,
+  useMaterial3: true,
+  fontFamily: 'OpenSans', 
+);
