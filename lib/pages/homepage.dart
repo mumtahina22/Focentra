@@ -57,7 +57,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
                 children: [
                   // App title in plain white with subtle shadow
                   Text(
-                    'ZenStudy',
+                    'Focentra',
                     style: const TextStyle(
                       fontFamily: 'Pacifico',
                       fontSize: 42,
@@ -82,7 +82,7 @@ class _HomePageState extends State<HomePage> with SingleTickerProviderStateMixin
 
                   // Main title
                   Text(
-                    'Mindful Learning',
+                    'Turn focus into progress.',
                     style: TextStyle(
                       fontFamily: 'Montserrat',
                       color: colorScheme.primaryContainer,
