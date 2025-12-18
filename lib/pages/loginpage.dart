@@ -83,7 +83,7 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'ZenStudy',
+                  'Focentra',
                   style: TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
@@ -93,7 +93,7 @@ class _LoginPageState extends State<LoginPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Focus on your learning journey',
+                  'Focus. Score. Level up.',
                   style: TextStyle(
                     fontSize: 16,
                     color: colorScheme.onSurfaceVariant,
@@ -257,7 +257,7 @@ class _LoginPageState extends State<LoginPage> {
                           },
                         ),
                         
-                        // --- 🟢 ADDED FORGOT PASSWORD BUTTON HERE ---
+                       
                         Align(
                           alignment: Alignment.centerRight,
                           child: TextButton(
@@ -352,18 +352,18 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  // --- 🟢 ADDED: EASY (OTP) PASSWORD RESET DIALOG ---
+  
   Future<void> _showForgotPasswordDialog() async {
     final emailController = TextEditingController();
     final otpController = TextEditingController();
     final newPasswordController = TextEditingController();
     
-    // Pre-fill email if typed in main form
+    
     if (_emailController.text.isNotEmpty) {
       emailController.text = _emailController.text;
     }
 
-    int step = 1; // 1 = Send Code, 2 = Verify & Update
+    int step = 1; 
     bool isProcessing = false;
 
     await showDialog(
