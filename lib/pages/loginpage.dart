@@ -40,7 +40,7 @@ class _LoginPageState extends State<LoginPage> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'ZenStudy',
+          'ZFocentra',
           style: TextStyle(
             color: colorScheme.onSurface,
             fontSize: 20,
