@@ -45,7 +45,7 @@ class _RegisterPageState extends State<RegisterPage> {
           onPressed: () => Navigator.pop(context),
         ),
         title: Text(
-          'ZenStudy',
+          'Focentra',
           style: TextStyle(
             color: colorScheme.onSurface,
             fontSize: 20,
@@ -88,7 +88,7 @@ class _RegisterPageState extends State<RegisterPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'ZenStudy',
+                  'Focentra',
                   style: TextStyle(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
