@@ -290,29 +290,27 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
       color: rank <= 3 ? rankColor?.withOpacity(0.1) : null,
       child: ListTile(
         contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-        leading: SizedBox(
-          width: 50,
-          child: Row(
-            children: [
-              if (rank <= 3 && rankIcon != null) ...[
-                Icon(
-                  rankIcon,
-                  color: rankColor,
-                  size: 24,
-                ),
-                const SizedBox(width: 4),
-              ],
-              Text(
-                '#$rank',
-                style: TextStyle(
-                  fontFamily: 'Montserrat',
-                  fontWeight: rank <= 3 ? FontWeight.bold : FontWeight.w600,
-                  fontSize: rank <= 3 ? 18 : 16,
-                  color: rank <= 3 ? rankColor : colorScheme.onSurface,
-                ),
+        leading: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (rank <= 3 && rankIcon != null) ...[
+              Icon(
+                rankIcon,
+                color: rankColor,
+                size: 24,
               ),
+              const SizedBox(width: 4),
             ],
-          ),
+            Text(
+              '#$rank',
+              style: TextStyle(
+                fontFamily: 'Montserrat',
+                fontWeight: rank <= 3 ? FontWeight.bold : FontWeight.w600,
+                fontSize: rank <= 3 ? 18 : 16,
+                color: rank <= 3 ? rankColor : colorScheme.onSurface,
+              ),
+            ),
+          ],
         ),
         title: Row(
           children: [

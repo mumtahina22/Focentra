@@ -253,29 +253,31 @@ class tasksdb {
 
   // ========== USER TABLE METHODS ==========
 
-  // Create or update user profile
+// Create or update user profile
   Future<void> createOrUpdateUser({
+    required String uid, // <--- ADD THIS
     required String email,
     required String fullname,
     String? displayname,
     String? avatarUrl,
   }) async {
-    final uid = authservice.getcurrentUseruid();
-    if (uid == null) return;
-
-    // Extract first name from full name
+    // REMOVE: final uid = authservice.getcurrentUseruid(); 
+    // We trust the ID passed from the registration page
+    
     final firstName = fullname.split(' ').first;
 
     await userstable.upsert({
-      'id': uid,
+      'id': uid, // Use the passed uid
       'email': email,
       'fullname': fullname,
-      'displayname': displayname ?? firstName, // Use first name as default
+      'displayname': displayname ?? firstName,
       'avatar_url': avatarUrl,
       'updated_at': DateTime.now().toIso8601String(),
+      'totalpoints': 0, // Initialize defaults if this is a new user
+      'monthlypoints': 0,
+      'currentstreak': 0,
     }, onConflict: 'id');
   }
-
   // Update total points (call this whenever points are added)
   Future<void> updateUserTotalPoints(int pointsToAdd) async {
     final uid = authservice.getcurrentUseruid();

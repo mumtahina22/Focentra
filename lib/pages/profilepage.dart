@@ -16,6 +16,16 @@ class _ProfilePageState extends State<ProfilePage> {
   Map<String, dynamic>? userProfile;
   bool isLoading = true;
 
+  // Define your available avatars here
+  final List<String> avatarOptions = [
+    'assets/profile-icon-9.png',
+    'assets/avatar-1.png',
+    'assets/avatar-2.png',
+    'assets/avatar-3.png',
+    'assets/avatar-4.png',
+    'assets/avatar-5.png',
+  ];
+
   @override
   void initState() {
     super.initState();
@@ -24,166 +34,259 @@ class _ProfilePageState extends State<ProfilePage> {
 
   Future<void> _loadUserProfile() async {
     try {
-      final profile = await taskdatabase.getUserProfile();
       final authUser = Supabase.instance.client.auth.currentUser;
       
-      // If no profile exists, create one
-      if (profile == null && authUser != null) {
+      if (authUser == null) {
+         if (mounted) setState(() => isLoading = false);
+         return;
+      }
+
+      final profile = await taskdatabase.getUserProfile();
+      
+      if (profile == null) {
+        // Create profile if it doesn't exist
         await taskdatabase.createOrUpdateUser(
+          uid: authUser.id,
           email: authUser.email!,
           fullname: authUser.userMetadata?['full_name'] ?? 'User',
         );
-        // Load the newly created profile
         final newProfile = await taskdatabase.getUserProfile();
-        setState(() {
-          userProfile = newProfile;
-          isLoading = false;
-        });
+        
+        if (mounted) {
+          setState(() {
+            userProfile = newProfile;
+            isLoading = false;
+          });
+        }
       } else {
-        setState(() {
-          userProfile = profile;
-          isLoading = false;
-        });
+        if (mounted) {
+          setState(() {
+            userProfile = profile;
+            isLoading = false;
+          });
+        }
       }
     } catch (e) {
       print('Error loading profile: $e');
-      setState(() {
-        isLoading = false;
-      });
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
-  Future<void> _showEditProfileDialog() async {
-    final displayNameController = TextEditingController(
-      text: userProfile?['displayname'] ?? '',
-    );
-    String? selectedAvatarUrl = userProfile?['avatar_url'];
+  Future<void> _showChangePasswordDialog() async {
+    final currentPassController = TextEditingController();
+    final newPassController = TextEditingController();
+    final confirmPassController = TextEditingController();
+    final formKey = GlobalKey<FormState>();
+    bool isUpdating = false;
+    bool isPasswordVisible = false;
 
-    showDialog(
+    await showDialog(
       context: context,
       builder: (context) {
         final colorScheme = Theme.of(context).colorScheme;
+        
         return StatefulBuilder(
-          builder: (context, setDialogState) => AlertDialog(
-            backgroundColor: colorScheme.surface,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            title: Text(
-              "Edit Profile",
-              style: TextStyle(
-                color: colorScheme.onSurface,
-                fontFamily: 'Montserrat',
-                fontWeight: FontWeight.w700,
+          builder: (context, setState) {
+            return AlertDialog(
+              backgroundColor: colorScheme.surface,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: const Text(
+                "Change Password",
+                style: TextStyle(fontWeight: FontWeight.bold),
               ),
-            ),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Profile Picture Section
-                Text(
-                  "Profile Picture",
-                  style: TextStyle(
-                    fontFamily: 'Montserrat',
-                    fontWeight: FontWeight.w600,
-                    fontSize: 16,
-                    color: colorScheme.onSurface,
+              content: SingleChildScrollView(
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Current Password
+                      TextFormField(
+                        controller: currentPassController,
+                        obscureText: !isPasswordVisible,
+                        decoration: const InputDecoration(
+                          labelText: "Current Password",
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) return 'Required';
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      
+                      // New Password
+                      TextFormField(
+                        controller: newPassController,
+                        obscureText: !isPasswordVisible,
+                        decoration: const InputDecoration(
+                          labelText: "New Password",
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) return 'Required';
+                          if (value.length < 6) return 'Min 6 characters';
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      
+                      // Confirm Password
+                      TextFormField(
+                        controller: confirmPassController,
+                        obscureText: !isPasswordVisible,
+                        decoration: const InputDecoration(
+                          labelText: "Confirm New Password",
+                          border: OutlineInputBorder(),
+                        ),
+                        validator: (value) {
+                          if (value != newPassController.text) {
+                            return 'Passwords do not match';
+                          }
+                          return null;
+                        },
+                      ),
+                      
+                      // Toggle Visibility
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          TextButton.icon(
+                            onPressed: () {
+                              setState(() {
+                                isPasswordVisible = !isPasswordVisible;
+                              });
+                            },
+                            icon: Icon(isPasswordVisible 
+                              ? Icons.visibility_off 
+                              : Icons.visibility, size: 18),
+                            label: Text(isPasswordVisible ? "Hide" : "Show"),
+                          ),
+                        ],
+                      )
+                    ],
                   ),
                 ),
-                const SizedBox(height: 12),
-                GestureDetector(
-                  onTap: () => _showAvatarSelectionDialog(setDialogState),
-                  child: CircleAvatar(
-                    radius: 40,
-                    backgroundImage: selectedAvatarUrl != null
-                        ? NetworkImage(selectedAvatarUrl!)
-                        : const AssetImage('assets/profile-icon-9.png') as ImageProvider,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.black.withOpacity(0.3),
-                      ),
-                      child: Icon(
-                        Icons.camera_alt,
-                        color: Colors.white,
-                        size: 24,
-                      ),
-                    ),
-                  ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Cancel"),
                 ),
-                const SizedBox(height: 20),
-                
-                // Display Name Field
-                TextField(
-                  controller: displayNameController,
-                  decoration: InputDecoration(
-                    labelText: "Display Name (shown on leaderboard)",
-                    labelStyle: TextStyle(fontFamily: 'Montserrat'),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  style: TextStyle(fontFamily: 'Montserrat'),
+                ElevatedButton(
+                  onPressed: isUpdating ? null : () async {
+                    if (formKey.currentState!.validate()) {
+                      setState(() => isUpdating = true);
+                      
+                      try {
+                        final supabase = Supabase.instance.client;
+                        final user = supabase.auth.currentUser;
+                        if (user == null || user.email == null) return;
+
+                        // 1. Verify Old Password by trying to sign in
+                        // We use the current email + entered old password
+                        final authResponse = await supabase.auth.signInWithPassword(
+                          email: user.email!,
+                          password: currentPassController.text,
+                        );
+
+                        if (authResponse.user != null) {
+                          // 2. If Verify Success, Update to New Password
+                          await supabase.auth.updateUser(
+                            UserAttributes(password: newPassController.text),
+                          );
+
+                          if (context.mounted) {
+                            Navigator.pop(context); // Close dialog
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: const Text("Password updated successfully!"),
+                                backgroundColor: colorScheme.primary,
+                              ),
+                            );
+                          }
+                        }
+                      } on AuthException catch (e) {
+                         setState(() => isUpdating = false);
+                         // Usually happens if old password is wrong
+                         if (context.mounted) {
+                           ScaffoldMessenger.of(context).showSnackBar(
+                             SnackBar(
+                               content: Text("Failed: ${e.message}"),
+                               backgroundColor: Colors.red,
+                             ),
+                           );
+                         }
+                      } catch (e) {
+                        setState(() => isUpdating = false);
+                        print(e);
+                      }
+                    }
+                  },
+                  child: isUpdating 
+                    ? const SizedBox(
+                        width: 20, height: 20, 
+                        child: CircularProgressIndicator(strokeWidth: 2)
+                      )
+                    : const Text("Update"),
                 ),
               ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text("Cancel"),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  if (displayNameController.text.isNotEmpty) {
-                    try {
-                      await taskdatabase.updateUserProfile(
-                        displayname: displayNameController.text,
-                        avatarUrl: selectedAvatarUrl,
-                      );
-                      Navigator.pop(context);
-                      _loadUserProfile(); // Reload profile data
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text("Profile updated successfully!"),
-                          backgroundColor: colorScheme.primary,
-                        ),
-                      );
-                    } catch (e) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text("Error updating profile: $e"),
-                          backgroundColor: Colors.red,
-                        ),
-                      );
-                    }
-                  }
-                },
-                child: Text("Save"),
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
   }
 
-  void _showAvatarSelectionDialog(StateSetter setDialogState) {
-    final List<String> avatarOptions = [
-      'assets/profile-icon-9.png',
-      'assets/avatar-1.png',
-      'assets/avatar-2.png',
-      'assets/avatar-3.png',
-      'assets/avatar-4.png',
-      'assets/avatar-5.png',
-    
-    ];
+  // Helper to safely load Asset OR Network images
+  ImageProvider _getAvatarImage(String? path) {
+    if (path == null || path.isEmpty) {
+      return const AssetImage('assets/profile-icon-9.png');
+    }
+    if (path.startsWith('http') || path.startsWith('https')) {
+      return NetworkImage(path);
+    }
+    return AssetImage(path);
+  }
 
-    showDialog(
+  // Logic to change avatar directly from main screen
+  Future<void> _handleAvatarChange() async {
+    // 1. Show the dialog and wait for selection
+    final String? selectedPath = await _showAvatarSelectionDialog();
+
+    // 2. If user picked something, update DB immediately
+    if (selectedPath != null) {
+      try {
+        // Show loading indicator briefly
+        setState(() => isLoading = true);
+
+        await taskdatabase.updateUserProfile(avatarUrl: selectedPath);
+        
+        // Reload profile to show change
+        await _loadUserProfile();
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Profile picture updated!")),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+           setState(() => isLoading = false);
+           ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+          );
+        }
+      }
+    }
+  }
+
+  Future<String?> _showAvatarSelectionDialog() async {
+    return await showDialog<String>(
       context: context,
       builder: (context) {
-        final colorScheme = Theme.of(context).colorScheme;
         return AlertDialog(
-          title: Text("Choose Avatar"),
+          title: const Text("Choose Avatar"),
           content: SizedBox(
             width: double.maxFinite,
             height: 300,
@@ -198,16 +301,18 @@ class _ProfilePageState extends State<ProfilePage> {
                 final avatarPath = avatarOptions[index];
                 return GestureDetector(
                   onTap: () {
-                    setDialogState(() {
-                      // For local assets, we'll store the path
-                      // In a real app, you'd upload to Supabase Storage
-                      // selectedAvatarUrl = avatarPath;
-                    });
-                    Navigator.pop(context);
+                    Navigator.pop(context, avatarPath);
                   },
-                  child: CircleAvatar(
-                    radius: 30,
-                    backgroundImage: AssetImage(avatarPath),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey.withOpacity(0.3)),
+                      shape: BoxShape.circle,
+                    ),
+                    child: CircleAvatar(
+                      radius: 30,
+                      backgroundColor: Colors.transparent,
+                      backgroundImage: AssetImage(avatarPath),
+                    ),
                   ),
                 );
               },
@@ -216,10 +321,65 @@ class _ProfilePageState extends State<ProfilePage> {
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
-              child: Text("Cancel"),
+              child: const Text("Cancel"),
             ),
           ],
         );
+      },
+    );
+  }
+
+  Future<void> _showEditProfileDialog() async {
+    final displayNameController = TextEditingController(
+      text: userProfile?['displayname'] ?? '',
+    );
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        final colorScheme = Theme.of(context).colorScheme;
+        return AlertDialog(
+            backgroundColor: colorScheme.surface,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            title: const Text("Edit Details"), // Renamed since avatar is changed outside
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: displayNameController,
+                  decoration: InputDecoration(
+                    labelText: "Display Name",
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text("Cancel"),
+              ),
+              ElevatedButton(
+                onPressed: () async {
+                  if (displayNameController.text.isNotEmpty) {
+                    try {
+                      await taskdatabase.updateUserProfile(
+                        displayname: displayNameController.text,
+                        // We don't update avatar here anymore, handled on main screen
+                      );
+                      if (context.mounted) Navigator.pop(context);
+                      _loadUserProfile();
+                    } catch (e) {
+                      print(e);
+                    }
+                  }
+                },
+                child: const Text("Save"),
+              ),
+            ],
+          );
       },
     );
   }
@@ -232,19 +392,7 @@ class _ProfilePageState extends State<ProfilePage> {
     if (isLoading) {
       return Scaffold(
         backgroundColor: colorScheme.background,
-        appBar: AppBar(
-          backgroundColor: colorScheme.primary,
-          title: Text(
-            'ZenStudy - Profile',
-            style: TextStyle(
-              fontFamily: 'OpenSans',
-              fontWeight: FontWeight.bold,
-              color: colorScheme.onPrimary,
-            ),
-          ),
-          centerTitle: true,
-        ),
-        body: Center(child: CircularProgressIndicator()),
+        body: const Center(child: CircularProgressIndicator()),
       );
     }
 
@@ -265,10 +413,8 @@ class _ProfilePageState extends State<ProfilePage> {
       body: SafeArea(
         child: Row(
           children: [
-            // LEFT PANEL
             const LeftPanel(currentPage: 'Profile'),
             
-            // RIGHT PANEL (Profile content)
             Expanded(
               child: Container(
                 width: double.infinity,
@@ -288,7 +434,6 @@ class _ProfilePageState extends State<ProfilePage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // Page Title
                       Text(
                         'My Profile',
                         style: TextStyle(
@@ -311,16 +456,49 @@ class _ProfilePageState extends State<ProfilePage> {
                             padding: const EdgeInsets.all(32),
                             child: Column(
                               children: [
-                                // Profile Image
-                                CircleAvatar(
-                                  radius: 60,
-                                  backgroundImage: userProfile?['avatar_url'] != null
-                                      ? NetworkImage(userProfile!['avatar_url'])
-                                      : AssetImage('assets/profile-icon-9.png') as ImageProvider,
+                                // --- CHANGE START: Clickable Avatar ---
+                                GestureDetector(
+                                  onTap: _handleAvatarChange,
+                                  child: Stack(
+                                    children: [
+                                      Container(
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          border: Border.all(
+                                            color: colorScheme.primary,
+                                            width: 3,
+                                          ),
+                                        ),
+                                        child: CircleAvatar(
+                                          radius: 60,
+                                          backgroundImage: _getAvatarImage(userProfile?['avatar_url']),
+                                        ),
+                                      ),
+                                      // Camera Icon Overlay
+                                      Positioned(
+                                        bottom: 0,
+                                        right: 4,
+                                        child: Container(
+                                          padding: const EdgeInsets.all(8),
+                                          decoration: BoxDecoration(
+                                            color: colorScheme.primary,
+                                            shape: BoxShape.circle,
+                                            border: Border.all(color: Colors.white, width: 2),
+                                          ),
+                                          child: const Icon(
+                                            Icons.camera_alt,
+                                            color: Colors.white,
+                                            size: 20,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
+                                // --- CHANGE END ---
+                                
                                 const SizedBox(height: 24),
 
-                                // Full Name
                                 Text(
                                   userProfile?['fullname'] ?? 'User',
                                   style: TextStyle(
@@ -332,7 +510,6 @@ class _ProfilePageState extends State<ProfilePage> {
                                 ),
                                 const SizedBox(height: 8),
 
-                                // Display Name
                                 if (userProfile?['displayname'] != userProfile?['fullname'])
                                   Text(
                                     '@${userProfile?['displayname'] ?? 'user'}',
@@ -345,7 +522,6 @@ class _ProfilePageState extends State<ProfilePage> {
                                   ),
                                 const SizedBox(height: 8),
 
-                                // Email
                                 Text(
                                   authUser?.email ?? '',
                                   style: TextStyle(
@@ -402,18 +578,56 @@ class _ProfilePageState extends State<ProfilePage> {
                       // Action Buttons
                       _profileTile(
                         icon: Icons.edit,
-                        label: 'Edit Profile',
+                        label: 'Edit Details',
                         colorScheme: colorScheme,
                         onTap: _showEditProfileDialog,
                       ),
-                      _profileTile(
-                        icon: Icons.settings,
-                        label: 'Settings',
-                        colorScheme: colorScheme,
-                        onTap: () {
-                          // TODO: Implement settings page
-                        },
-                      ),
+                     // ... inside your build method's children list ...
+
+_profileTile(
+  icon: Icons.settings,
+  label: 'Settings',
+  colorScheme: colorScheme,
+  onTap: () {
+    // Show Settings Bottom Sheet
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: colorScheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Padding(
+          padding: const EdgeInsets.symmetric(vertical: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text(
+                "Settings",
+                style: TextStyle(
+                  fontFamily: 'Montserrat',
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                ),
+              ),
+              const SizedBox(height: 20),
+              ListTile(
+                leading: Icon(Icons.lock_outline, color: colorScheme.primary),
+                title: const Text("Change Password"),
+                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                onTap: () {
+                  Navigator.pop(context); // Close sheet
+                  _showChangePasswordDialog(); // Open Password Dialog
+                },
+              ),
+              // Add more settings here later if needed
+            ],
+          ),
+        );
+      },
+    );
+  },
+),
                       _profileTile(
                         icon: Icons.logout,
                         label: 'Logout',
@@ -422,26 +636,29 @@ class _ProfilePageState extends State<ProfilePage> {
                           showDialog(
                             context: context,
                             builder: (context) => AlertDialog(
-                              title: Text("Confirm Logout"),
-                              content: Text("Are you sure you want to logout?"),
+                              title: const Text("Confirm Logout"),
+                              content: const Text("Are you sure you want to logout?"),
                               actions: [
                                 TextButton(
                                   onPressed: () => Navigator.pop(context),
-                                  child: Text("Cancel"),
+                                  child: const Text("Cancel"),
                                 ),
                                 ElevatedButton(
                                   onPressed: () async {
                                     await Supabase.instance.client.auth.signOut();
-                                    Navigator.pushAndRemoveUntil(
-                                      context,
-                                      MaterialPageRoute(builder: (_) => const LoginPage()),
-                                      (route) => false,
-                                    );
+                                    if (context.mounted) {
+                                      Navigator.pushAndRemoveUntil(
+                                        context,
+                                        MaterialPageRoute(builder: (_) => const LoginPage()),
+                                        (route) => false,
+                                      );
+                                    }
                                   },
                                   style: ElevatedButton.styleFrom(
                                     backgroundColor: Colors.red,
+                                    foregroundColor: Colors.white,
                                   ),
-                                  child: Text("Logout"),
+                                  child: const Text("Logout"),
                                 ),
                               ],
                             ),
@@ -473,11 +690,7 @@ class _ProfilePageState extends State<ProfilePage> {
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
-            Icon(
-              icon,
-              size: 32,
-              color: color,
-            ),
+            Icon(icon, size: 32, color: color),
             const SizedBox(height: 12),
             Text(
               value,

@@ -5,6 +5,7 @@ import 'package:zenstudy/pages/pomodoropage.dart';
 import 'package:zenstudy/pages/profilepage.dart';
 import 'package:zenstudy/pages/tasknhabitpage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:zenstudy/db/tasks_db.dart'; // Import your tasks_db
 
 class LeftPanel extends StatefulWidget {
   final String? currentPage; // Optional parameter to highlight current page
@@ -17,21 +18,57 @@ class LeftPanel extends StatefulWidget {
 
 class _LeftPanelState extends State<LeftPanel> {
   String userName = 'User';
+  String? avatarUrl; // Add a variable to store the avatar URL
+  final taskdatabase = tasksdb(); // Instance of your database service
 
   @override
   void initState() {
     super.initState();
-    _fetchUserName();
+    _fetchUserProfile(); // Call the new method to fetch profile data
   }
 
-  // Fetch user name
-  Future<void> _fetchUserName() async {
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user != null && user.userMetadata != null) {
-      setState(() {
-        userName = user.userMetadata!['full_name'] ?? 'User';
-      });
+  // Fetch user profile data (name and avatar)
+  Future<void> _fetchUserProfile() async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user != null) {
+        // 1. Try to get profile from your custom 'Users' table first
+        final profile = await taskdatabase.getUserProfile();
+        
+        if (profile != null) {
+          if (mounted) {
+            setState(() {
+              // Use display name if available, otherwise full name
+              userName = profile['displayname'] ?? profile['fullname'] ?? 'User';
+              avatarUrl = profile['avatar_url'];
+            });
+          }
+        } else if (user.userMetadata != null) {
+          // 2. Fallback to auth metadata if no custom profile exists yet
+          if (mounted) {
+            setState(() {
+              userName = user.userMetadata!['full_name'] ?? 'User';
+              // Auth metadata might not have avatar_url unless set on signup
+              avatarUrl = user.userMetadata!['avatar_url']; 
+            });
+          }
+        }
+      }
+    } catch (e) {
+      print('Error fetching user profile for left panel: $e');
     }
+  }
+
+  // Helper function to get the correct image provider
+  ImageProvider _getAvatarImage(String? path) {
+    if (path == null || path.isEmpty) {
+      return const AssetImage('assets/profile-icon-9.png');
+    }
+    if (path.startsWith('http') || path.startsWith('https')) {
+      return NetworkImage(path);
+    }
+    // Assuming other paths are local assets (like from your avatar selection dialog)
+    return AssetImage(path);
   }
 
   @override
@@ -49,15 +86,19 @@ class _LeftPanelState extends State<LeftPanel> {
             child: Column(
               children: [
                 GestureDetector(
-                  onTap: () {
-                    Navigator.push(
+                  onTap: () async {
+                    // Wait for the ProfilePage to pop, then refresh data
+                    await Navigator.push(
                       context,
                       MaterialPageRoute(builder: (_) => const ProfilePage()),
                     );
+                    // Refresh profile data when returning from ProfilePage
+                    _fetchUserProfile();
                   },
-                  child: const CircleAvatar(
+                  child: CircleAvatar(
                     radius: 40,
-                    backgroundImage: AssetImage('assets/profile-icon-9.png'),
+                    // Use the helper function here
+                    backgroundImage: _getAvatarImage(avatarUrl),
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -89,6 +130,7 @@ class _LeftPanelState extends State<LeftPanel> {
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(12),
               child: Column(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   _dashboardTile(
                     icon: Icons.dashboard,
@@ -142,20 +184,13 @@ class _LeftPanelState extends State<LeftPanel> {
                       if (widget.currentPage != 'Leaderboard') {
                         Navigator.pushReplacement(
                           context,
-                          MaterialPageRoute(builder: (_) => const LeaderboardPage()),
+                          MaterialPageRoute(
+                              builder: (_) => const LeaderboardPage()),
                         );
                       }
                     },
                   ),
-                  const SizedBox(height: 16),
-                  _dashboardTile(
-                    icon: Icons.phone_iphone_outlined,
-                    label: 'Screen-Free',
-                    isSelected: widget.currentPage == 'Screen-Free',
-                    onTap: () {
-                      // Add navigation when screen-free page is created
-                    },
-                  ),
+                  
                 ],
               ),
             ),

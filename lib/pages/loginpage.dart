@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'; // Import Supabase
 import 'package:zenstudy/auth/authservice.dart';
 import 'package:zenstudy/pages/maindashboard.dart';
 import 'package:zenstudy/pages/registerpage.dart';
@@ -255,7 +256,25 @@ class _LoginPageState extends State<LoginPage> {
                             return null;
                           },
                         ),
-                        const SizedBox(height: 24),
+                        
+                        // --- 🟢 ADDED FORGOT PASSWORD BUTTON HERE ---
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: _showForgotPasswordDialog,
+                            child: Text(
+                              "Forgot Password?",
+                              style: TextStyle(
+                                color: colorScheme.primary,
+                                fontWeight: FontWeight.w600,
+                                fontFamily: 'OpenSans',
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ),
+                        
+                        const SizedBox(height: 16),
                         // Login button
                         SizedBox(
                           width: double.infinity,
@@ -333,7 +352,158 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  // Simplified Supabase login
+  // --- 🟢 ADDED: EASY (OTP) PASSWORD RESET DIALOG ---
+  Future<void> _showForgotPasswordDialog() async {
+    final emailController = TextEditingController();
+    final otpController = TextEditingController();
+    final newPasswordController = TextEditingController();
+    
+    // Pre-fill email if typed in main form
+    if (_emailController.text.isNotEmpty) {
+      emailController.text = _emailController.text;
+    }
+
+    int step = 1; // 1 = Send Code, 2 = Verify & Update
+    bool isProcessing = false;
+
+    await showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        final colorScheme = Theme.of(context).colorScheme;
+
+        return StatefulBuilder(
+          builder: (context, setState) {
+            return AlertDialog(
+              backgroundColor: colorScheme.surface,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Text(
+                step == 1 ? "Reset Password" : "Enter Code",
+                style: const TextStyle(fontWeight: FontWeight.bold),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (step == 1) ...[
+                      const Text("We will send a 6-digit code to your email."),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: emailController,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: const InputDecoration(
+                          labelText: "Email Address",
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.email),
+                        ),
+                      ),
+                    ] else ...[
+                      const Text("Code sent! Enter it below with your new password."),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: otpController,
+                        keyboardType: TextInputType.number,
+                        decoration: const InputDecoration(
+                          labelText: "6-Digit Code",
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.pin),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: newPasswordController,
+                        obscureText: true,
+                        decoration: const InputDecoration(
+                          labelText: "New Password",
+                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(Icons.lock_reset),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Cancel"),
+                ),
+                ElevatedButton(
+                  onPressed: isProcessing ? null : () async {
+                    final email = emailController.text.trim();
+                    setState(() => isProcessing = true);
+
+                    try {
+                      // STEP 1: SEND CODE
+                      if (step == 1) {
+                        if (email.isEmpty) throw "Enter email";
+                        await Supabase.instance.client.auth.signInWithOtp(
+                          email: email,
+                          shouldCreateUser: false,
+                        );
+                        setState(() {
+                          step = 2;
+                          isProcessing = false;
+                        });
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text("Code sent to email")),
+                          );
+                        }
+                      } 
+                      // STEP 2: VERIFY & UPDATE
+                      else {
+                        final otp = otpController.text.trim();
+                        final newPass = newPasswordController.text;
+                        
+                        if (otp.isEmpty || newPass.length < 6) throw "Invalid details";
+
+                        // 1. Log in with code
+                        final res = await Supabase.instance.client.auth.verifyOTP(
+                          token: otp,
+                          type: OtpType.email,
+                          email: email,
+                        );
+
+                        if (res.session != null) {
+                          // 2. Update password
+                          await Supabase.instance.client.auth.updateUser(
+                            UserAttributes(password: newPass),
+                          );
+
+                          if (context.mounted) {
+                            Navigator.pop(context); // Close dialog
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(builder: (_) => const MainDashboard()),
+                            );
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text("Password updated successfully!")),
+                            );
+                          }
+                        }
+                      }
+                    } catch (e) {
+                      setState(() => isProcessing = false);
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+                        );
+                      }
+                    }
+                  },
+                  child: isProcessing 
+                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    : Text(step == 1 ? "Send Code" : "Update Password"),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _handleLogin() async {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
@@ -344,16 +514,19 @@ class _LoginPageState extends State<LoginPage> {
           _passwordController.text,
         );
 
-        setState(() => _isLoading = false);
-
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const MainDashboard()),
-        );
+        if (mounted) {
+           setState(() => _isLoading = false);
+           Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (_) => const MainDashboard()),
+          );
+        }
       } catch (e) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text("Error: $e")));
+        if (mounted) {
+          setState(() => _isLoading = false);
+          ScaffoldMessenger.of(context)
+              .showSnackBar(SnackBar(content: Text("Error: $e")));
+        }
       }
     }
   }

@@ -340,49 +340,61 @@ class _RegisterPageState extends State<RegisterPage> {
   }
 
   void _handleRegister() async {
-  if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) return;
 
-  setState(() => _isLoading = true);
+    setState(() => _isLoading = true);
 
-  final supabase = Supabase.instance.client;
+    final supabase = Supabase.instance.client;
 
-  try {
-    final res = await supabase.auth.signUp(
-      email: _emailController.text.trim(),
-      password: _passwordController.text,
-    );
-
-    if (res.user != null) {
-      await supabase.auth.updateUser(
-        UserAttributes(
-          data: {'full_name': _nameController.text.trim()},
-        ),
-      );
-
-      // CREATE USER PROFILE IN USERS TABLE - ADD THIS BLOCK
-      await taskdatabase.createOrUpdateUser(
+    try {
+      // 1. Sign up
+      final res = await supabase.auth.signUp(
         email: _emailController.text.trim(),
-        fullname: _nameController.text.trim(),
+        password: _passwordController.text,
       );
 
-      setState(() => _isLoading = false);
+      // 2. Check if user was created
+      if (res.user != null) {
+        
+        // Optional: Update Auth Metadata
+        await supabase.auth.updateUser(
+          UserAttributes(
+            data: {'full_name': _nameController.text.trim()},
+          ),
+        );
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Account created successfully!')),
-      );
+        // 3. CREATE PROFILE - Pass the ID explicitly
+        await taskdatabase.createOrUpdateUser(
+          uid: res.user!.id, // <--- Pass the ID here
+          email: _emailController.text.trim(),
+          fullname: _nameController.text.trim(),
+        );
 
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginPage()),
-      );
+        if (mounted) {
+           ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Account created successfully!')),
+          );
+          
+          // Clear stack and go to login
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const LoginPage()),
+            (route) => false,
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
-  } catch (e) {
-    setState(() => _isLoading = false);
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text('Error: $e')));
   }
-}
-
   @override
   void dispose() {
     _nameController.dispose();
