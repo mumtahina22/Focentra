@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:zenstudy/db/tasks_db.dart';
-import 'package:zenstudy/widgets/left_panel.dart';
+
+import '../db/tasks_db.dart';
+import '../widgets/left_panel.dart';
+
 
 class LeaderboardPage extends StatefulWidget {
   const LeaderboardPage({super.key});
@@ -52,13 +54,20 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final size = MediaQuery.of(context).size;
 
     return Scaffold(
+      drawer: Drawer(
+        child: SizedBox(
+          width: size.width * 0.5,
+          child: LeftPanel(),
+        ),
+      ),
       backgroundColor: colorScheme.background,
       appBar: AppBar(
         backgroundColor: colorScheme.primary,
         title: Text(
-          'ZenStudy - Leaderboard',
+          'Focentra - Leaderboard',
           style: TextStyle(
             fontFamily: 'OpenSans',
             fontWeight: FontWeight.bold,
@@ -77,7 +86,7 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
         child: Row(
           children: [
             // LEFT PANEL
-            const LeftPanel(currentPage: 'Leaderboard'),
+            //const LeftPanel(currentPage: 'Leaderboard'),
             
             // RIGHT PANEL (Leaderboard content)
             Expanded(
@@ -98,13 +107,15 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       // Page Title
-                      Text(
-                        'Monthly Leaderboard',
-                        style: TextStyle(
-                          fontFamily: 'Montserrat',
-                          fontSize: 28,
-                          fontWeight: FontWeight.w700,
-                          color: colorScheme.onBackground,
+                      Center(
+                        child: Text(
+                          'Monthly Leaderboard',
+                          style: TextStyle(
+                            fontFamily: 'Montserrat',
+                            fontSize: 28,
+                            fontWeight: FontWeight.w700,
+                            color: colorScheme.onBackground,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 8),

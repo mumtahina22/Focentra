@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:zenstudy/pages/loginpage.dart';
+
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:zenstudy/db/tasks_db.dart';
+
+import '../db/tasks_db.dart';
+import 'loginpage.dart';
+
 
 class RegisterPage extends StatefulWidget {
   const RegisterPage({super.key});

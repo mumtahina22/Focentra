@@ -1,8 +1,10 @@
 
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:zenstudy/db/tasks_db.dart';
-import 'package:zenstudy/widgets/left_panel.dart'; // Import the new left panel
+
+import '../db/tasks_db.dart';
+import '../widgets/left_panel.dart';
+// Import the new left panel
 
 class MainDashboard extends StatefulWidget {
   const MainDashboard({super.key});
@@ -96,13 +98,20 @@ Future<void> _fetchUserName() async {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
+    final size = MediaQuery.of(context).size;
 
     return Scaffold(
+      drawer: Drawer(
+        child: SizedBox(
+          width: size.width * 0.5,
+          child: LeftPanel(),
+        ),
+      ),
       backgroundColor: colorScheme.background,
       appBar: AppBar(
         backgroundColor: colorScheme.primary,
         title: Text(
-          'ZenStudy',
+          'Focentra',
           style: TextStyle(
             fontFamily: 'OpenSans',
             fontWeight: FontWeight.bold,
@@ -115,7 +124,7 @@ Future<void> _fetchUserName() async {
         child: Row(
           children: [
             // Use the new LeftPanel widget
-            const LeftPanel(currentPage: 'Dashboard'),
+            //const LeftPanel(currentPage: 'Dashboard'),
             
             // RIGHT PANEL (Dashboard content)
             Expanded(
@@ -124,13 +133,15 @@ Future<void> _fetchUserName() async {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Welcome Back, $userName!',
-                      style: TextStyle(
-                        fontFamily: 'Montserrat',
-                        fontSize: 28,
-                        fontWeight: FontWeight.w700,
-                        color: colorScheme.onBackground,
+                    Center(
+                      child: Text(
+                        'Welcome Back, $userName!',
+                        style: TextStyle(
+                          fontFamily: 'Montserrat',
+                          fontSize: 28,
+                          fontWeight: FontWeight.w700,
+                          color: colorScheme.onBackground,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 24),

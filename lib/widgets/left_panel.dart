@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
-import 'package:zenstudy/pages/leaderboard.dart';
-import 'package:zenstudy/pages/maindashboard.dart';
-import 'package:zenstudy/pages/pomodoropage.dart';
-import 'package:zenstudy/pages/profilepage.dart';
-import 'package:zenstudy/pages/tasknhabitpage.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:zenstudy/db/tasks_db.dart'; // Import your tasks_db
+import '../db/tasks_db.dart';
+import '../pages/leaderboard.dart';
+import '../pages/maindashboard.dart';
+import '../pages/pomodoropage.dart';
+import '../pages/profilepage.dart';
+import '../pages/tasknhabitpage.dart';
+// Import your tasks_db
 
 class LeftPanel extends StatefulWidget {
   final String? currentPage; // Optional parameter to highlight current page
@@ -27,6 +28,8 @@ class _LeftPanelState extends State<LeftPanel> {
     _fetchUserProfile(); // Call the new method to fetch profile data
   }
 
+
+
   // Fetch user profile data (name and avatar)
   Future<void> _fetchUserProfile() async {
     try {
@@ -34,7 +37,7 @@ class _LeftPanelState extends State<LeftPanel> {
       if (user != null) {
         // 1. Try to get profile from your custom 'Users' table first
         final profile = await taskdatabase.getUserProfile();
-        
+
         if (profile != null) {
           if (mounted) {
             setState(() {
@@ -49,7 +52,7 @@ class _LeftPanelState extends State<LeftPanel> {
             setState(() {
               userName = user.userMetadata!['full_name'] ?? 'User';
               // Auth metadata might not have avatar_url unless set on signup
-              avatarUrl = user.userMetadata!['avatar_url']; 
+              avatarUrl = user.userMetadata!['avatar_url'];
             });
           }
         }
@@ -80,6 +83,7 @@ class _LeftPanelState extends State<LeftPanel> {
       width: screenWidth * 0.25,
       color: colorScheme.surfaceVariant,
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Container(
             padding: const EdgeInsets.symmetric(vertical: 24),
@@ -126,73 +130,71 @@ class _LeftPanelState extends State<LeftPanel> {
             ),
           ),
           Divider(color: Colors.grey.shade400),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  _dashboardTile(
-                    icon: Icons.dashboard,
-                    label: 'Dashboard',
-                    isSelected: widget.currentPage == 'Dashboard',
-                    onTap: () {
-                      if (widget.currentPage != 'Dashboard') {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const MainDashboard(),
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  _dashboardTile(
-                    icon: Icons.timer,
-                    label: 'Pomodoro',
-                    isSelected: widget.currentPage == 'Pomodoro',
-                    onTap: () {
-                      if (widget.currentPage != 'Pomodoro') {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (_) => const Pomodoro()),
-                        );
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  _dashboardTile(
-                    icon: Icons.check_circle_outline,
-                    label: 'Tasks',
-                    isSelected: widget.currentPage == 'Tasks',
-                    onTap: () {
-                      if (widget.currentPage != 'Tasks') {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (_) => const TaskPage()),
-                        );
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  _dashboardTile(
-                    icon: Icons.leaderboard,
-                    label: 'Leaderboard',
-                    isSelected: widget.currentPage == 'Leaderboard',
-                    onTap: () {
-                      if (widget.currentPage != 'Leaderboard') {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(
-                              builder: (_) => const LeaderboardPage()),
-                        );
-                      }
-                    },
-                  ),
-                  
-                ],
-              ),
+          Container(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              children: [
+                _dashboardTile(
+                  icon: Icons.dashboard,
+                  label: 'Dashboard',
+                  isSelected: widget.currentPage == 'Dashboard',
+                  onTap: () {
+                    if (widget.currentPage != 'Dashboard') {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const MainDashboard(),
+                        ),
+                      );
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
+                _dashboardTile(
+                  icon: Icons.timer,
+                  label: 'Pomodoro',
+                  isSelected: widget.currentPage == 'Pomodoro',
+                  onTap: () {
+                    if (widget.currentPage != 'Pomodoro') {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (_) => const Pomodoro()),
+                      );
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
+                _dashboardTile(
+                  icon: Icons.check_circle_outline,
+                  label: 'Tasks',
+                  isSelected: widget.currentPage == 'Tasks',
+                  onTap: () {
+                    if (widget.currentPage != 'Tasks') {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (_) => const TaskPage()),
+                      );
+                    }
+                  },
+                ),
+                const SizedBox(height: 16),
+                _dashboardTile(
+                  icon: Icons.leaderboard,
+                  label: 'Leaderboard',
+                  isSelected: widget.currentPage == 'Leaderboard',
+                  onTap: () {
+                    if (widget.currentPage != 'Leaderboard') {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const LeaderboardPage()),
+                      );
+                    }
+                  },
+                ),
+
+              ],
             ),
           ),
         ],
@@ -210,6 +212,8 @@ class _LeftPanelState extends State<LeftPanel> {
     return GestureDetector(
       onTap: onTap ?? () {},
       child: Container(
+        height: 80,
+        width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
         decoration: BoxDecoration(
           color: isSelected
@@ -228,6 +232,7 @@ class _LeftPanelState extends State<LeftPanel> {
               : null,
         ),
         child: Row(
+          //mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
               icon,
@@ -240,10 +245,13 @@ class _LeftPanelState extends State<LeftPanel> {
             Expanded(
               child: Text(
                 label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                //softWrap: false,
                 style: TextStyle(
                   fontFamily: 'Montserrat',
                   fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
-                  fontSize: 10,
+                  fontSize: 12,
                   color: isSelected
                       ? colorScheme.primary
                       : colorScheme.onPrimaryContainer,

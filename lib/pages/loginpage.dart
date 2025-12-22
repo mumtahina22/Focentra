@@ -1,8 +1,10 @@
+import 'package:Focentra/pages/registerpage.dart';
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart'; // Import Supabase
-import 'package:zenstudy/auth/authservice.dart';
-import 'package:zenstudy/pages/maindashboard.dart';
-import 'package:zenstudy/pages/registerpage.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+import '../auth/authservice.dart';
+import 'maindashboard.dart'; // Import Supabase
+
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});

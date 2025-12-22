@@ -1,5 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:zenstudy/auth/authservice.dart';
+
+import '../auth/authservice.dart';
 
 class tasksdb {
   final tasktable = Supabase.instance.client.from('Tasks');

@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:zenstudy/pages/loginpage.dart';
-import 'package:zenstudy/db/tasks_db.dart';
-import 'package:zenstudy/widgets/left_panel.dart';
+
+import '../db/tasks_db.dart';
+import '../widgets/left_panel.dart';
+import 'loginpage.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -388,6 +389,7 @@ class _ProfilePageState extends State<ProfilePage> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final authUser = Supabase.instance.client.auth.currentUser;
+    final screenSize = MediaQuery.of(context).size;
 
     if (isLoading) {
       return Scaffold(
@@ -397,11 +399,17 @@ class _ProfilePageState extends State<ProfilePage> {
     }
 
     return Scaffold(
+      drawer: Drawer(
+        child: SizedBox(
+          width: screenSize.width * 0.5,
+          child: LeftPanel(),
+        ),
+      ),
       backgroundColor: colorScheme.background,
       appBar: AppBar(
         backgroundColor: colorScheme.primary,
         title: Text(
-          'ZenStudy - Profile',
+          'Focentra - Profile',
           style: TextStyle(
             fontFamily: 'OpenSans',
             fontWeight: FontWeight.bold,
@@ -413,7 +421,7 @@ class _ProfilePageState extends State<ProfilePage> {
       body: SafeArea(
         child: Row(
           children: [
-            const LeftPanel(currentPage: 'Profile'),
+            //const LeftPanel(currentPage: 'Profile'),
             
             Expanded(
               child: Container(
@@ -434,13 +442,15 @@ class _ProfilePageState extends State<ProfilePage> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        'My Profile',
-                        style: TextStyle(
-                          fontFamily: 'Montserrat',
-                          fontSize: 28,
-                          fontWeight: FontWeight.w700,
-                          color: colorScheme.onBackground,
+                      Center(
+                        child: Text(
+                          'My Profile',
+                          style: TextStyle(
+                            fontFamily: 'Montserrat',
+                            fontSize: 28,
+                            fontWeight: FontWeight.w700,
+                            color: colorScheme.onBackground,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 40),

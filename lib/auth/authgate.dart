@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:zenstudy/pages/homepage.dart';
-import 'package:zenstudy/pages/loginpage.dart';
-import 'package:zenstudy/pages/maindashboard.dart';
+
+import '../pages/homepage.dart';
+import '../pages/maindashboard.dart';
 
 
 class Authgate extends StatelessWidget {

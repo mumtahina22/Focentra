@@ -1,13 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:zenstudy/db/tasks_db.dart';
-import 'package:zenstudy/notification.dart';
-import 'package:zenstudy/pages/homepage.dart';
+import 'auth/authgate.dart';
+import 'db/tasks_db.dart';
+import 'notification.dart';
 import 'theme/light_theme.dart';
 import 'theme/dark_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:zenstudy/auth/authgate.dart';
+
 
 
 
@@ -47,7 +47,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'ZenStudyApp',
+      title: 'Focentra',
       theme: lightTheme,
       darkTheme: darkTheme,
       themeMode: ThemeMode.system,

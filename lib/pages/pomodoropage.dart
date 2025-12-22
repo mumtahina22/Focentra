@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:zenstudy/db/tasks_db.dart';
-import 'package:zenstudy/notification.dart';
-import 'package:zenstudy/widgets/left_panel.dart'; // Import the LeftPanel
+
+import '../db/tasks_db.dart';
+import '../notification.dart';
+import '../widgets/left_panel.dart';
+
 
 class Pomodoro extends StatefulWidget {
   const Pomodoro({super.key});
@@ -14,7 +16,7 @@ class Pomodoro extends StatefulWidget {
 class _PomodoroState extends State<Pomodoro> {
   final taskdatabase = tasksdb();
 
-  static const int WORK_MIN = 25;        // set your work duration
+  static const int WORK_MIN = 3;        // set your work duration
   static const int SHORT_BREAK_MIN = 5; // short break
   static const int LONG_BREAK_MIN = 20; // long break
 
@@ -30,6 +32,7 @@ class _PomodoroState extends State<Pomodoro> {
   @override
   void initState() {
     super.initState();
+    _initializeNotifications();
     _loadWorkSessions();      // load today's sessions once
     totalSeconds = WORK_MIN * 60;
     secondsRemaining = totalSeconds;
@@ -40,6 +43,11 @@ class _PomodoroState extends State<Pomodoro> {
     setState(() {
       workSessionsDone = sessions;
     });
+  }
+
+  Future<void> _initializeNotifications() async {
+    await LocalNotifications.init();
+    await LocalNotifications.requestExactAlarmPermissionSafe();
   }
 
   void startTimer() {
@@ -79,10 +87,13 @@ class _PomodoroState extends State<Pomodoro> {
         payload: "work_start",
       );
 
+
       // Pre-break alert 1 minute before work session ends
       if (totalSeconds > 60) {
+        int duration = totalSeconds - 60;
+        print(duration);
         LocalNotifications.showScheduleNotification(
-          duration: totalSeconds - 60,
+          duration: duration,
           title: "Almost Done!",
           body: "Your work session is almost over. Get ready to rest.",
           payload: "work_almost_over",
@@ -139,13 +150,20 @@ class _PomodoroState extends State<Pomodoro> {
     final colorScheme = Theme.of(context).colorScheme;
     const double size = 180;
     const double strokeWidth = 12;
+    final screenSize = MediaQuery.of(context).size;
 
     return Scaffold(
+      drawer: Drawer(
+        child: SizedBox(
+          width: screenSize.width * 0.5,
+          child: LeftPanel(),
+        ),
+      ),
       backgroundColor: colorScheme.background,
       appBar: AppBar(
         backgroundColor: colorScheme.primary,
         title: Text(
-          'ZenStudy - Pomodoro',
+          'Focentra - Pomodoro',
           style: TextStyle(
             fontFamily: 'OpenSans',
             fontWeight: FontWeight.bold,
@@ -158,7 +176,7 @@ class _PomodoroState extends State<Pomodoro> {
         child: Row(
           children: [
             // LEFT PANEL
-            const LeftPanel(currentPage: 'Pomodoro'),
+            //const LeftPanel(currentPage: 'Pomodoro'),
             
             // RIGHT PANEL (Pomodoro content)
             Expanded(
@@ -182,13 +200,15 @@ class _PomodoroState extends State<Pomodoro> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         // Page Title
-                        Text(
-                          'Pomodoro Timer',
-                          style: TextStyle(
-                            fontFamily: 'Montserrat',
-                            fontSize: 28,
-                            fontWeight: FontWeight.w700,
-                            color: colorScheme.onBackground,
+                        Center(
+                          child: Text(
+                            'Pomodoro Timer',
+                            style: TextStyle(
+                              fontFamily: 'Montserrat',
+                              fontSize: 28,
+                              fontWeight: FontWeight.w700,
+                              color: colorScheme.onBackground,
+                            ),
                           ),
                         ),
                         const SizedBox(height: 40),
@@ -334,7 +354,7 @@ class _PomodoroState extends State<Pomodoro> {
                                       Row(
                                         mainAxisAlignment: MainAxisAlignment.center,
                                         children: List.generate(
-                                          10, // Max sessions
+                                          8, // Max sessions
                                           (index) => Padding(
                                             padding: const EdgeInsets.symmetric(horizontal: 4),
                                             child: CircleAvatar(

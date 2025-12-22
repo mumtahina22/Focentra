@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:zenstudy/auth/authservice.dart';
-import 'package:zenstudy/db/tasks_db.dart';
-import 'package:zenstudy/widgets/left_panel.dart'; // Import the LeftPanel
+
+import '../auth/authservice.dart';
+import '../db/tasks_db.dart';
+import '../widgets/left_panel.dart';
+ // Import the LeftPanel
 
 class TaskPage extends StatefulWidget {
   const TaskPage({super.key});
@@ -193,15 +195,22 @@ class _TaskPageState extends State<TaskPage>
   Widget build(BuildContext context) {
     final uid = authservice.getcurrentUseruid();
     final colorScheme = Theme.of(context).colorScheme;
+    final size = MediaQuery.of(context).size;
 
     return DefaultTabController(
       length: chooseList.length,
       child: Scaffold(
+        drawer: Drawer(
+          child: SizedBox(
+            width: size.width * 0.5,
+            child: LeftPanel(),
+          ),
+        ),
         backgroundColor: colorScheme.background,
         appBar: AppBar(
           backgroundColor: colorScheme.primary,
           title: Text(
-            'ZenStudy - Tasks',
+            'Focentra - Tasks',
             style: TextStyle(
               fontFamily: 'OpenSans',
               fontWeight: FontWeight.bold,
@@ -214,7 +223,7 @@ class _TaskPageState extends State<TaskPage>
           child: Row(
             children: [
               // LEFT PANEL
-              const LeftPanel(currentPage: 'Tasks'),
+              //const LeftPanel(currentPage: 'Tasks'),
               
               // RIGHT PANEL (Tasks content)
               Expanded(
@@ -224,13 +233,15 @@ class _TaskPageState extends State<TaskPage>
                     Container(
                       padding: const EdgeInsets.all(24),
                       alignment: Alignment.centerLeft,
-                      child: Text(
-                        'Tasks & Habits',
-                        style: TextStyle(
-                          fontFamily: 'Montserrat',
-                          fontSize: 28,
-                          fontWeight: FontWeight.w700,
-                          color: colorScheme.onBackground,
+                      child: Center(
+                        child: Text(
+                          'Tasks & Habits',
+                          style: TextStyle(
+                            fontFamily: 'Montserrat',
+                            fontSize: 28,
+                            fontWeight: FontWeight.w700,
+                            color: colorScheme.onBackground,
+                          ),
                         ),
                       ),
                     ),
@@ -313,11 +324,13 @@ class _TaskPageState extends State<TaskPage>
                                     ),
                                     elevation: 2,
                                     child: ListTile(
-                                      contentPadding: const EdgeInsets.all(16),
+                                      contentPadding: const EdgeInsets.all(10),
                                       leading: Checkbox(
                                         value: done,
-                                        onChanged: (value) =>
-                                            toggleDone(id, value ?? false, points),
+                                        onChanged: (value) {
+                                          setState(() {});
+                                          toggleDone(id, value ?? false, points);
+                                        }
                                       ),
                                       title: Text(
                                         title,
@@ -359,7 +372,7 @@ class _TaskPageState extends State<TaskPage>
                                               ),
                                             ),
                                           ),
-                                          const SizedBox(width: 8),
+                                          //const SizedBox(width: 5),
                                           // Edit Button
                                           IconButton(
                                             icon: Icon(Icons.edit, color: Colors.blue),

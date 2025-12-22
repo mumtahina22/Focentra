@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:zenstudy/pages/loginpage.dart';
+
+import 'loginpage.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
