@@ -1,3 +1,4 @@
+import 'package:Focentra/auth/authgate.dart';
 import 'package:Focentra/pages/registerpage.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -520,7 +521,7 @@ class _LoginPageState extends State<LoginPage> {
            setState(() => _isLoading = false);
            Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (_) => const MainDashboard()),
+            MaterialPageRoute(builder: (_) => const Authgate()),
           );
         }
       } catch (e) {

@@ -1,5 +1,5 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-
+import '../services/ml_service.dart';
 import '../auth/authservice.dart';
 
 class tasksdb {
@@ -44,13 +44,38 @@ class tasksdb {
   }
 
   // Toggle "done"
-  Future<void> toggleDone(dynamic taskid, bool done) async {
-    await tasktable.update({'done': done}).eq('id', taskid);
+Future<void> toggleDone(dynamic taskid, bool done, {
+  String taskInterval = 'Daily',
+  int basePoints = 0,
+}) async {
+  await tasktable.update({'done': done}).eq('id', taskid);
+  if (done == true) {
+    await calculateAndIncrementStreak();
+
+    // Get ML-adjusted points if base points provided
+    if (basePoints > 0) {
+      final uid = authservice.getcurrentUseruid();
+      if (uid != null) {
+        final adjustedPoints = await MLService.getAdjustedPoints(
+          uid: uid,
+          basePoints: basePoints,
+          taskInterval: taskInterval,
+        );
+        await addPointsLog(taskid, adjustedPoints);
+        return;
+      }
+    }
+    // Fallback — log base points directly
+    if (basePoints > 0) {
+      await addPointsLog(taskid, basePoints);
+    }
   }
+}
 
   // Delete
   Future<void> deletetask(dynamic taskid) async {
     await tasktable.delete().eq('id', taskid);
+    
   }
 
   Future<void> resetTasks(String category) async {
@@ -205,8 +230,40 @@ class tasksdb {
   }
 
   // Main safety check method - call this on app start
+// Main safety check method - call this on app start
   Future<void> checkAndPerformResets() async {
+    // 🌟 1. Look up user identity first to authorize the database query
+    final uid = authservice.getcurrentUseruid();
+    if (uid == null) return;
+
     final now = DateTime.now();
+
+    // 🌟 2. STREAK BREAK SAFETY CHECK: 
+    // If they missed a whole day without a completion, drop streak back to 0 instantly.
+    try {
+      final profile = await userstable
+          .select('last_active_date')
+          .eq('id', uid)
+          .maybeSingle();
+
+      if (profile != null && profile['last_active_date'] != null) {
+        final lastActive = DateTime.parse(profile['last_active_date']);
+        final today = DateTime(now.year, now.month, now.day); // Clean date (00:00)
+        final lastActiveDay = DateTime(lastActive.year, lastActive.month, lastActive.day);
+        
+        // If more than 1 day has passed since midnight of their last completion day...
+        if (today.difference(lastActiveDay).inDays > 1) {
+          await userstable.update({'currentstreak': 0}).eq('id', uid);
+          print("User missed a consecutive day. Streak reset to 0.");
+        }
+      }
+    } catch (e) {
+      print("Error running background streak check: $e");
+    }
+
+    // ----------------------------------------------------
+    // 3. TASK INTERVAL RESETS (Your existing code continues below)
+    // ----------------------------------------------------
 
     // Check daily reset (only if it's a NEW DAY, not just 24 hours)
     final lastDailyReset = await getLastResetDate('Daily');
@@ -246,7 +303,6 @@ class tasksdb {
 
     if (lastResetMonth.isBefore(startOfCurrentMonth)) {
       await resetTasks("Monthly");
-      await resetAllUsersMonthlyPoints(); // Reset monthly points for all users
       await updateResetLog('Monthly');
       print("Monthly tasks and points reset performed");
     }
@@ -316,10 +372,6 @@ class tasksdb {
         .eq('id', uid);
   }
 
-  // Reset monthly points for all users (call at start of new month)
-  Future<void> resetAllUsersMonthlyPoints() async {
-    await userstable.update({'monthlypoints': 0});
-  }
 
   // Get user profile
   Future<Map<String, dynamic>?> getUserProfile() async {
@@ -333,14 +385,56 @@ class tasksdb {
   }
 
   // Update user streak
-  Future<void> updateUserStreak(int newStreak) async {
-    final uid = authservice.getcurrentUseruid();
-    if (uid == null) return;
+Future<void> calculateAndIncrementStreak() async {
+  final uid = authservice.getcurrentUseruid();
+  if (uid == null) return;
 
-    await userstable
-        .update({'currentstreak': newStreak})
-        .eq('id', uid);
+  try {
+    // 1. Fetch current streak data
+    final userProfile = await userstable
+        .select('currentstreak, last_active_date')
+        .eq('id', uid)
+        .maybeSingle();
+
+    if (userProfile == null) return;
+
+    int currentStreak = userProfile['currentstreak'] ?? 0;
+    String? lastActiveStr = userProfile['last_active_date'];
+
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day); // Strip time, keep date
+
+    if (lastActiveStr != null) {
+      final lastActiveDate = DateTime.parse(lastActiveStr);
+      final lastActiveDay = DateTime(lastActiveDate.year, lastActiveDate.month, lastActiveDate.day);
+
+      // Calculate days difference between today and last completion day
+      final difference = today.difference(lastActiveDay).inDays;
+
+      if (difference == 1) {
+        // Converted: They did work yesterday! Streak grows.
+        currentStreak += 1;
+      } else if (difference > 1) {
+        // Broken: They missed a day or more. Reset streak to 1.
+        currentStreak = 1;
+      }
+      // Note: If difference == 0, they already did a task today. Keep current streak without adding.
+    } else {
+      // First time starting a streak
+      currentStreak = 1;
+    }
+
+    // 2. Save calculated figures back to Supabase
+    await userstable.update({
+      'currentstreak': currentStreak,
+      'last_active_date': now.toIso8601String(),
+      'updated_at': now.toIso8601String(),
+    }).eq('id', uid);
+
+  } catch (e) {
+    print("Error calculating streak updates: $e");
   }
+}
 
   // Get monthly leaderboard
   Future<List<Map<String, dynamic>>> getMonthlyLeaderboard({int limit = 10}) async {

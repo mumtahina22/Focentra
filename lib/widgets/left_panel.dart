@@ -5,11 +5,11 @@ import '../pages/leaderboard.dart';
 import '../pages/maindashboard.dart';
 import '../pages/pomodoropage.dart';
 import '../pages/profilepage.dart';
+import '../pages/progress_page.dart';
 import '../pages/tasknhabitpage.dart';
-// Import your tasks_db
 
 class LeftPanel extends StatefulWidget {
-  final String? currentPage; // Optional parameter to highlight current page
+  final String? currentPage;
 
   const LeftPanel({super.key, this.currentPage});
 
@@ -19,39 +19,31 @@ class LeftPanel extends StatefulWidget {
 
 class _LeftPanelState extends State<LeftPanel> {
   String userName = 'User';
-  String? avatarUrl; // Add a variable to store the avatar URL
-  final taskdatabase = tasksdb(); // Instance of your database service
+  String? avatarUrl;
+  final taskdatabase = tasksdb();
 
   @override
   void initState() {
     super.initState();
-    _fetchUserProfile(); // Call the new method to fetch profile data
+    _fetchUserProfile();
   }
 
-
-
-  // Fetch user profile data (name and avatar)
   Future<void> _fetchUserProfile() async {
     try {
       final user = Supabase.instance.client.auth.currentUser;
       if (user != null) {
-        // 1. Try to get profile from your custom 'Users' table first
         final profile = await taskdatabase.getUserProfile();
-
         if (profile != null) {
           if (mounted) {
             setState(() {
-              // Use display name if available, otherwise full name
               userName = profile['displayname'] ?? profile['fullname'] ?? 'User';
               avatarUrl = profile['avatar_url'];
             });
           }
         } else if (user.userMetadata != null) {
-          // 2. Fallback to auth metadata if no custom profile exists yet
           if (mounted) {
             setState(() {
               userName = user.userMetadata!['full_name'] ?? 'User';
-              // Auth metadata might not have avatar_url unless set on signup
               avatarUrl = user.userMetadata!['avatar_url'];
             });
           }
@@ -62,7 +54,6 @@ class _LeftPanelState extends State<LeftPanel> {
     }
   }
 
-  // Helper function to get the correct image provider
   ImageProvider _getAvatarImage(String? path) {
     if (path == null || path.isEmpty) {
       return const AssetImage('assets/profile-icon-9.png');
@@ -70,7 +61,6 @@ class _LeftPanelState extends State<LeftPanel> {
     if (path.startsWith('http') || path.startsWith('https')) {
       return NetworkImage(path);
     }
-    // Assuming other paths are local assets (like from your avatar selection dialog)
     return AssetImage(path);
   }
 
@@ -91,17 +81,15 @@ class _LeftPanelState extends State<LeftPanel> {
               children: [
                 GestureDetector(
                   onTap: () async {
-                    // Wait for the ProfilePage to pop, then refresh data
                     await Navigator.push(
                       context,
-                      MaterialPageRoute(builder: (_) => const ProfilePage()),
+                      MaterialPageRoute(
+                          builder: (_) => const ProfilePage()),
                     );
-                    // Refresh profile data when returning from ProfilePage
                     _fetchUserProfile();
                   },
                   child: CircleAvatar(
                     radius: 40,
-                    // Use the helper function here
                     backgroundImage: _getAvatarImage(avatarUrl),
                   ),
                 ),
@@ -144,8 +132,7 @@ class _LeftPanelState extends State<LeftPanel> {
                       Navigator.pushReplacement(
                         context,
                         MaterialPageRoute(
-                          builder: (_) => const MainDashboard(),
-                        ),
+                            builder: (_) => const MainDashboard()),
                       );
                     }
                   },
@@ -159,7 +146,8 @@ class _LeftPanelState extends State<LeftPanel> {
                     if (widget.currentPage != 'Pomodoro') {
                       Navigator.pushReplacement(
                         context,
-                        MaterialPageRoute(builder: (_) => const Pomodoro()),
+                        MaterialPageRoute(
+                            builder: (_) => const Pomodoro()),
                       );
                     }
                   },
@@ -173,7 +161,8 @@ class _LeftPanelState extends State<LeftPanel> {
                     if (widget.currentPage != 'Tasks') {
                       Navigator.pushReplacement(
                         context,
-                        MaterialPageRoute(builder: (_) => const TaskPage()),
+                        MaterialPageRoute(
+                            builder: (_) => const TaskPage()),
                       );
                     }
                   },
@@ -193,7 +182,23 @@ class _LeftPanelState extends State<LeftPanel> {
                     }
                   },
                 ),
+                const SizedBox(height: 16),
 
+                // ── NEW: Progress page tile ──────────────────────
+                _dashboardTile(
+                  icon: Icons.insights,
+                  label: 'Progress',
+                  isSelected: widget.currentPage == 'Progress',
+                  onTap: () {
+                    if (widget.currentPage != 'Progress') {
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(
+                            builder: (_) => const ProgressPage()),
+                      );
+                    }
+                  },
+                ),
               ],
             ),
           ),
@@ -214,17 +219,18 @@ class _LeftPanelState extends State<LeftPanel> {
       child: Container(
         height: 80,
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
+        padding:
+            const EdgeInsets.symmetric(vertical: 16, horizontal: 12),
         decoration: BoxDecoration(
           color: isSelected
               ? colorScheme.primary.withOpacity(0.2)
               : colorScheme.primaryContainer,
           borderRadius: BorderRadius.circular(18),
-          boxShadow: [
+          boxShadow: const [
             BoxShadow(
               color: Colors.black12,
               blurRadius: 6,
-              offset: const Offset(2, 2),
+              offset: Offset(2, 2),
             ),
           ],
           border: isSelected
@@ -232,7 +238,6 @@ class _LeftPanelState extends State<LeftPanel> {
               : null,
         ),
         child: Row(
-          //mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
               icon,
@@ -247,10 +252,11 @@ class _LeftPanelState extends State<LeftPanel> {
                 label,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                //softWrap: false,
                 style: TextStyle(
                   fontFamily: 'Montserrat',
-                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w600,
+                  fontWeight: isSelected
+                      ? FontWeight.w700
+                      : FontWeight.w600,
                   fontSize: 12,
                   color: isSelected
                       ? colorScheme.primary

@@ -120,7 +120,7 @@ class _LeaderboardPageState extends State<LeaderboardPage> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'See how you rank among other ZenStudy users this month!',
+                        'See how you rank among other Focentra users this month!',
                         style: TextStyle(
                           fontFamily: 'Montserrat',
                           fontSize: 16,

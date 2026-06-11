@@ -8,7 +8,7 @@ import 'theme/light_theme.dart';
 import 'theme/dark_theme.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
-
+import 'package:http/http.dart' as http;
 
 
 Future main() async {
@@ -23,17 +23,20 @@ Future main() async {
   });
 
   await Supabase.initialize(
-    url: 'https://ikhlblfxfbmfzhlzazio.supabase.co',
+    url: 'https://chaeutterjwmcuvjbbrn.supabase.co',
     anonKey:
-        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlraGxibGZ4ZmJtZnpobHphemlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcxNjk4MjgsImV4cCI6MjA3Mjc0NTgyOH0.sGfqi6ok7LjYb9V28RSPENZxiPkKDlgqTDrX8gAl2gU',
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNoYWV1dHRlcmp3bWN1dmpiYnJuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk5NzY4ODYsImV4cCI6MjA5NTU1Mjg4Nn0.OCa0ubJOpub1fbWT2ig2jNEHbWw3RoXWhWIP7Ju8M3s',
   );
 
+  // Wake up Railway ML service in background
+Future.delayed(Duration.zero, () async {
   try {
-    final tasksDb = tasksdb();
-    await tasksDb.checkAndPerformResets();
-  } catch (e) {
-    print("Error checking resets on app start: $e");
-  }
+    await http.get(
+      Uri.parse('https://web-production-5b14b9.up.railway.app/health'),
+    ).timeout(const Duration(seconds: 30));
+  } catch (_) {}
+});
+
   
   LocalNotifications.init();
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../services/ml_service.dart';
 import '../db/tasks_db.dart';
 import '../widgets/left_panel.dart';
 import 'loginpage.dart';
@@ -16,8 +17,8 @@ class _ProfilePageState extends State<ProfilePage> {
   final taskdatabase = tasksdb();
   Map<String, dynamic>? userProfile;
   bool isLoading = true;
+  Map<String, dynamic>? _mlProfile;
 
-  // Define your available avatars here
   final List<String> avatarOptions = [
     'assets/profile-icon-9.png',
     'assets/avatar-1.png',
@@ -31,28 +32,27 @@ class _ProfilePageState extends State<ProfilePage> {
   void initState() {
     super.initState();
     _loadUserProfile();
+    _loadMLProfile();
   }
 
   Future<void> _loadUserProfile() async {
     try {
       final authUser = Supabase.instance.client.auth.currentUser;
-      
+
       if (authUser == null) {
-         if (mounted) setState(() => isLoading = false);
-         return;
+        if (mounted) setState(() => isLoading = false);
+        return;
       }
 
       final profile = await taskdatabase.getUserProfile();
-      
+
       if (profile == null) {
-        // Create profile if it doesn't exist
         await taskdatabase.createOrUpdateUser(
           uid: authUser.id,
           email: authUser.email!,
           fullname: authUser.userMetadata?['full_name'] ?? 'User',
         );
         final newProfile = await taskdatabase.getUserProfile();
-        
         if (mounted) {
           setState(() {
             userProfile = newProfile;
@@ -73,6 +73,15 @@ class _ProfilePageState extends State<ProfilePage> {
     }
   }
 
+  Future<void> _loadMLProfile() async {
+    final uid = Supabase.instance.client.auth.currentUser?.id;
+    if (uid == null) return;
+    final profile = await MLService.fetchMLProfile(uid);
+    if (mounted) {
+      setState(() => _mlProfile = profile);
+    }
+  }
+
   Future<void> _showChangePasswordDialog() async {
     final currentPassController = TextEditingController();
     final newPassController = TextEditingController();
@@ -85,12 +94,13 @@ class _ProfilePageState extends State<ProfilePage> {
       context: context,
       builder: (context) {
         final colorScheme = Theme.of(context).colorScheme;
-        
+
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
               backgroundColor: colorScheme.surface,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16)),
               title: const Text(
                 "Change Password",
                 style: TextStyle(fontWeight: FontWeight.bold),
@@ -101,7 +111,6 @@ class _ProfilePageState extends State<ProfilePage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Current Password
                       TextFormField(
                         controller: currentPassController,
                         obscureText: !isPasswordVisible,
@@ -115,8 +124,6 @@ class _ProfilePageState extends State<ProfilePage> {
                         },
                       ),
                       const SizedBox(height: 16),
-                      
-                      // New Password
                       TextFormField(
                         controller: newPassController,
                         obscureText: !isPasswordVisible,
@@ -131,8 +138,6 @@ class _ProfilePageState extends State<ProfilePage> {
                         },
                       ),
                       const SizedBox(height: 16),
-                      
-                      // Confirm Password
                       TextFormField(
                         controller: confirmPassController,
                         obscureText: !isPasswordVisible,
@@ -147,8 +152,6 @@ class _ProfilePageState extends State<ProfilePage> {
                           return null;
                         },
                       ),
-                      
-                      // Toggle Visibility
                       Row(
                         mainAxisAlignment: MainAxisAlignment.end,
                         children: [
@@ -158,10 +161,13 @@ class _ProfilePageState extends State<ProfilePage> {
                                 isPasswordVisible = !isPasswordVisible;
                               });
                             },
-                            icon: Icon(isPasswordVisible 
-                              ? Icons.visibility_off 
-                              : Icons.visibility, size: 18),
-                            label: Text(isPasswordVisible ? "Hide" : "Show"),
+                            icon: Icon(
+                                isPasswordVisible
+                                    ? Icons.visibility_off
+                                    : Icons.visibility,
+                                size: 18),
+                            label:
+                                Text(isPasswordVisible ? "Hide" : "Show"),
                           ),
                         ],
                       )
@@ -175,61 +181,61 @@ class _ProfilePageState extends State<ProfilePage> {
                   child: const Text("Cancel"),
                 ),
                 ElevatedButton(
-                  onPressed: isUpdating ? null : () async {
-                    if (formKey.currentState!.validate()) {
-                      setState(() => isUpdating = true);
-                      
-                      try {
-                        final supabase = Supabase.instance.client;
-                        final user = supabase.auth.currentUser;
-                        if (user == null || user.email == null) return;
+                  onPressed: isUpdating
+                      ? null
+                      : () async {
+                          if (formKey.currentState!.validate()) {
+                            setState(() => isUpdating = true);
+                            try {
+                              final supabase = Supabase.instance.client;
+                              final user = supabase.auth.currentUser;
+                              if (user == null || user.email == null) return;
 
-                        // 1. Verify Old Password by trying to sign in
-                        // We use the current email + entered old password
-                        final authResponse = await supabase.auth.signInWithPassword(
-                          email: user.email!,
-                          password: currentPassController.text,
-                        );
+                              final authResponse =
+                                  await supabase.auth.signInWithPassword(
+                                email: user.email!,
+                                password: currentPassController.text,
+                              );
 
-                        if (authResponse.user != null) {
-                          // 2. If Verify Success, Update to New Password
-                          await supabase.auth.updateUser(
-                            UserAttributes(password: newPassController.text),
-                          );
-
-                          if (context.mounted) {
-                            Navigator.pop(context); // Close dialog
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: const Text("Password updated successfully!"),
-                                backgroundColor: colorScheme.primary,
-                              ),
-                            );
+                              if (authResponse.user != null) {
+                                await supabase.auth.updateUser(
+                                  UserAttributes(
+                                      password: newPassController.text),
+                                );
+                                if (context.mounted) {
+                                  Navigator.pop(context);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: const Text(
+                                          "Password updated successfully!"),
+                                      backgroundColor: colorScheme.primary,
+                                    ),
+                                  );
+                                }
+                              }
+                            } on AuthException catch (e) {
+                              setState(() => isUpdating = false);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text("Failed: ${e.message}"),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
+                            } catch (e) {
+                              setState(() => isUpdating = false);
+                              print(e);
+                            }
                           }
-                        }
-                      } on AuthException catch (e) {
-                         setState(() => isUpdating = false);
-                         // Usually happens if old password is wrong
-                         if (context.mounted) {
-                           ScaffoldMessenger.of(context).showSnackBar(
-                             SnackBar(
-                               content: Text("Failed: ${e.message}"),
-                               backgroundColor: Colors.red,
-                             ),
-                           );
-                         }
-                      } catch (e) {
-                        setState(() => isUpdating = false);
-                        print(e);
-                      }
-                    }
-                  },
-                  child: isUpdating 
-                    ? const SizedBox(
-                        width: 20, height: 20, 
-                        child: CircularProgressIndicator(strokeWidth: 2)
-                      )
-                    : const Text("Update"),
+                        },
+                  child: isUpdating
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child:
+                              CircularProgressIndicator(strokeWidth: 2))
+                      : const Text("Update"),
                 ),
               ],
             );
@@ -239,7 +245,6 @@ class _ProfilePageState extends State<ProfilePage> {
     );
   }
 
-  // Helper to safely load Asset OR Network images
   ImageProvider _getAvatarImage(String? path) {
     if (path == null || path.isEmpty) {
       return const AssetImage('assets/profile-icon-9.png');
@@ -250,22 +255,13 @@ class _ProfilePageState extends State<ProfilePage> {
     return AssetImage(path);
   }
 
-  // Logic to change avatar directly from main screen
   Future<void> _handleAvatarChange() async {
-    // 1. Show the dialog and wait for selection
     final String? selectedPath = await _showAvatarSelectionDialog();
-
-    // 2. If user picked something, update DB immediately
     if (selectedPath != null) {
       try {
-        // Show loading indicator briefly
         setState(() => isLoading = true);
-
         await taskdatabase.updateUserProfile(avatarUrl: selectedPath);
-        
-        // Reload profile to show change
         await _loadUserProfile();
-
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text("Profile picture updated!")),
@@ -273,9 +269,11 @@ class _ProfilePageState extends State<ProfilePage> {
         }
       } catch (e) {
         if (mounted) {
-           setState(() => isLoading = false);
-           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+          setState(() => isLoading = false);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content: Text("Error: $e"),
+                backgroundColor: Colors.red),
           );
         }
       }
@@ -292,7 +290,8 @@ class _ProfilePageState extends State<ProfilePage> {
             width: double.maxFinite,
             height: 300,
             child: GridView.builder(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              gridDelegate:
+                  const SliverGridDelegateWithFixedCrossAxisCount(
                 crossAxisCount: 3,
                 crossAxisSpacing: 10,
                 mainAxisSpacing: 10,
@@ -301,12 +300,11 @@ class _ProfilePageState extends State<ProfilePage> {
               itemBuilder: (context, index) {
                 final avatarPath = avatarOptions[index];
                 return GestureDetector(
-                  onTap: () {
-                    Navigator.pop(context, avatarPath);
-                  },
+                  onTap: () => Navigator.pop(context, avatarPath),
                   child: Container(
                     decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey.withOpacity(0.3)),
+                      border: Border.all(
+                          color: Colors.grey.withOpacity(0.3)),
                       shape: BoxShape.circle,
                     ),
                     child: CircleAvatar(
@@ -340,47 +338,47 @@ class _ProfilePageState extends State<ProfilePage> {
       builder: (context) {
         final colorScheme = Theme.of(context).colorScheme;
         return AlertDialog(
-            backgroundColor: colorScheme.surface,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            title: const Text("Edit Details"), // Renamed since avatar is changed outside
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: displayNameController,
-                  decoration: InputDecoration(
-                    labelText: "Display Name",
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
+          backgroundColor: colorScheme.surface,
+          shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16)),
+          title: const Text("Edit Details"),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: displayNameController,
+                decoration: InputDecoration(
+                  labelText: "Display Name",
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
                   ),
                 ),
-              ],
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text("Cancel"),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  if (displayNameController.text.isNotEmpty) {
-                    try {
-                      await taskdatabase.updateUserProfile(
-                        displayname: displayNameController.text,
-                        // We don't update avatar here anymore, handled on main screen
-                      );
-                      if (context.mounted) Navigator.pop(context);
-                      _loadUserProfile();
-                    } catch (e) {
-                      print(e);
-                    }
-                  }
-                },
-                child: const Text("Save"),
               ),
             ],
-          );
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("Cancel"),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                if (displayNameController.text.isNotEmpty) {
+                  try {
+                    await taskdatabase.updateUserProfile(
+                      displayname: displayNameController.text,
+                    );
+                    if (context.mounted) Navigator.pop(context);
+                    _loadUserProfile();
+                  } catch (e) {
+                    print(e);
+                  }
+                }
+              },
+              child: const Text("Save"),
+            ),
+          ],
+        );
       },
     );
   }
@@ -421,8 +419,6 @@ class _ProfilePageState extends State<ProfilePage> {
       body: SafeArea(
         child: Row(
           children: [
-            //const LeftPanel(currentPage: 'Profile'),
-            
             Expanded(
               child: Container(
                 width: double.infinity,
@@ -455,7 +451,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       ),
                       const SizedBox(height: 40),
 
-                      // Profile Card
+                      // ── Profile Card ────────────────────────────────
                       Center(
                         child: Card(
                           shape: RoundedRectangleBorder(
@@ -466,7 +462,6 @@ class _ProfilePageState extends State<ProfilePage> {
                             padding: const EdgeInsets.all(32),
                             child: Column(
                               children: [
-                                // --- CHANGE START: Clickable Avatar ---
                                 GestureDetector(
                                   onTap: _handleAvatarChange,
                                   child: Stack(
@@ -481,10 +476,10 @@ class _ProfilePageState extends State<ProfilePage> {
                                         ),
                                         child: CircleAvatar(
                                           radius: 60,
-                                          backgroundImage: _getAvatarImage(userProfile?['avatar_url']),
+                                          backgroundImage: _getAvatarImage(
+                                              userProfile?['avatar_url']),
                                         ),
                                       ),
-                                      // Camera Icon Overlay
                                       Positioned(
                                         bottom: 0,
                                         right: 4,
@@ -493,7 +488,9 @@ class _ProfilePageState extends State<ProfilePage> {
                                           decoration: BoxDecoration(
                                             color: colorScheme.primary,
                                             shape: BoxShape.circle,
-                                            border: Border.all(color: Colors.white, width: 2),
+                                            border: Border.all(
+                                                color: Colors.white,
+                                                width: 2),
                                           ),
                                           child: const Icon(
                                             Icons.camera_alt,
@@ -505,10 +502,7 @@ class _ProfilePageState extends State<ProfilePage> {
                                     ],
                                   ),
                                 ),
-                                // --- CHANGE END ---
-                                
                                 const SizedBox(height: 24),
-
                                 Text(
                                   userProfile?['fullname'] ?? 'User',
                                   style: TextStyle(
@@ -519,8 +513,8 @@ class _ProfilePageState extends State<ProfilePage> {
                                   ),
                                 ),
                                 const SizedBox(height: 8),
-
-                                if (userProfile?['displayname'] != userProfile?['fullname'])
+                                if (userProfile?['displayname'] !=
+                                    userProfile?['fullname'])
                                   Text(
                                     '@${userProfile?['displayname'] ?? 'user'}',
                                     style: TextStyle(
@@ -531,13 +525,13 @@ class _ProfilePageState extends State<ProfilePage> {
                                     ),
                                   ),
                                 const SizedBox(height: 8),
-
                                 Text(
                                   authUser?.email ?? '',
                                   style: TextStyle(
                                     fontFamily: 'Montserrat',
                                     fontSize: 16,
-                                    color: colorScheme.onSurface.withOpacity(0.7),
+                                    color: colorScheme.onSurface
+                                        .withOpacity(0.7),
                                   ),
                                 ),
                               ],
@@ -548,13 +542,14 @@ class _ProfilePageState extends State<ProfilePage> {
 
                       const SizedBox(height: 32),
 
-                      // Stats Cards
+                      // ── Stats Row ───────────────────────────────────
                       Row(
                         children: [
                           Expanded(
                             child: _statCard(
                               title: 'Total Points',
-                              value: '${userProfile?['totalpoints'] ?? 0}',
+                              value:
+                                  '${userProfile?['totalpoints'] ?? 0}',
                               icon: Icons.star,
                               color: Colors.amber,
                               colorScheme: colorScheme,
@@ -564,7 +559,8 @@ class _ProfilePageState extends State<ProfilePage> {
                           Expanded(
                             child: _statCard(
                               title: 'Monthly Points',
-                              value: '${userProfile?['monthlypoints'] ?? 0}',
+                              value:
+                                  '${userProfile?['monthlypoints'] ?? 0}',
                               icon: Icons.calendar_month,
                               color: Colors.blue,
                               colorScheme: colorScheme,
@@ -574,7 +570,8 @@ class _ProfilePageState extends State<ProfilePage> {
                           Expanded(
                             child: _statCard(
                               title: 'Current Streak',
-                              value: '${userProfile?['currentstreak'] ?? 0}',
+                              value:
+                                  '${userProfile?['currentstreak'] ?? 0}',
                               icon: Icons.local_fire_department,
                               color: Colors.orange,
                               colorScheme: colorScheme,
@@ -583,61 +580,236 @@ class _ProfilePageState extends State<ProfilePage> {
                         ],
                       ),
 
+                      // ── ML Archetype Card ───────────────────────────
+                      if (_mlProfile != null) ...[
+                        const SizedBox(height: 16),
+                        Builder(builder: (context) {
+                          final archetype =
+                              MLService.getArchetype(_mlProfile);
+                          final emoji =
+                              MLService.getArchetypeEmoji(archetype);
+                          final color = Color(
+                              MLService.getArchetypeColor(archetype));
+                          final isProvisional =
+                              MLService.isProvisional(_mlProfile);
+                          final daysActive =
+                              ((_mlProfile!['days_active'] as num?) ?? 0)
+                                  .toInt();
+                          final alpha =
+                              ((_mlProfile!['alpha'] as num?) ?? 1.0)
+                                  .toDouble();
+                          final confidence =
+                              ((_mlProfile!['confidence'] as num?) ?? 0.0)
+                                  .toDouble();
+
+                          return Card(
+                            shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16)),
+                            elevation: 3,
+                            child: Padding(
+                              padding: const EdgeInsets.all(20),
+                              child: Column(
+                                crossAxisAlignment:
+                                    CrossAxisAlignment.start,
+                                children: [
+                                  // Header row
+                                  Row(
+                                    children: [
+                                      Container(
+                                        width: 48,
+                                        height: 48,
+                                        decoration: BoxDecoration(
+                                          color:
+                                              color.withOpacity(0.15),
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Center(
+                                          child: Text(
+                                            emoji,
+                                            style: const TextStyle(
+                                                fontSize: 24),
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 16),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Productivity Archetype',
+                                              style: TextStyle(
+                                                fontFamily: 'Montserrat',
+                                                fontSize: 12,
+                                                color: colorScheme
+                                                    .onSurface
+                                                    .withOpacity(0.5),
+                                                fontWeight:
+                                                    FontWeight.w500,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 4),
+                                            Text(
+                                              isProvisional
+                                                  ? 'Learning your patterns...'
+                                                  : archetype,
+                                              style: TextStyle(
+                                                fontFamily: 'Montserrat',
+                                                fontWeight:
+                                                    FontWeight.w700,
+                                                fontSize: 15,
+                                                color: isProvisional
+                                                    ? colorScheme
+                                                        .onSurface
+                                                        .withOpacity(0.4)
+                                                    : color,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+
+                                  const SizedBox(height: 16),
+
+                                  // Confidence bar
+                                  Row(
+                                    children: [
+                                      Text(
+                                        'Confidence',
+                                        style: TextStyle(
+                                          fontFamily: 'Montserrat',
+                                          fontSize: 12,
+                                          color: colorScheme.onSurface
+                                              .withOpacity(0.6),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                          child: LinearProgressIndicator(
+                                            value: confidence,
+                                            minHeight: 8,
+                                            backgroundColor: colorScheme
+                                                .onSurface
+                                                .withOpacity(0.1),
+                                            color: isProvisional
+                                                ? Colors.grey
+                                                : color,
+                                          ),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        '${(confidence * 100).toInt()}%',
+                                        style: TextStyle(
+                                          fontFamily: 'Montserrat',
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w600,
+                                          color: colorScheme.onSurface,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+
+                                  const SizedBox(height: 12),
+
+                                  // Days active + personalisation level
+                                  Row(
+                                    mainAxisAlignment:
+                                        MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      _mlInfoChip(
+                                        '$daysActive days active',
+                                        Icons.calendar_today,
+                                        colorScheme,
+                                      ),
+                                      _mlInfoChip(
+                                        '${((1 - alpha) * 100).toInt()}% personalised',
+                                        Icons.tune,
+                                        colorScheme,
+                                      ),
+                                      _mlInfoChip(
+                                        isProvisional
+                                            ? 'Provisional'
+                                            : 'Confirmed',
+                                        isProvisional
+                                            ? Icons.hourglass_top
+                                            : Icons.check_circle,
+                                        colorScheme,
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }),
+                      ],
+
                       const SizedBox(height: 32),
 
-                      // Action Buttons
+                      // ── Action Buttons ──────────────────────────────
                       _profileTile(
                         icon: Icons.edit,
                         label: 'Edit Details',
                         colorScheme: colorScheme,
                         onTap: _showEditProfileDialog,
                       ),
-                     // ... inside your build method's children list ...
 
-_profileTile(
-  icon: Icons.settings,
-  label: 'Settings',
-  colorScheme: colorScheme,
-  onTap: () {
-    // Show Settings Bottom Sheet
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: colorScheme.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (context) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(vertical: 20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text(
-                "Settings",
-                style: TextStyle(
-                  fontFamily: 'Montserrat',
-                  fontWeight: FontWeight.bold,
-                  fontSize: 20,
-                ),
-              ),
-              const SizedBox(height: 20),
-              ListTile(
-                leading: Icon(Icons.lock_outline, color: colorScheme.primary),
-                title: const Text("Change Password"),
-                trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                onTap: () {
-                  Navigator.pop(context); // Close sheet
-                  _showChangePasswordDialog(); // Open Password Dialog
-                },
-              ),
-              // Add more settings here later if needed
-            ],
-          ),
-        );
-      },
-    );
-  },
-),
+                      _profileTile(
+                        icon: Icons.settings,
+                        label: 'Settings',
+                        colorScheme: colorScheme,
+                        onTap: () {
+                          showModalBottomSheet(
+                            context: context,
+                            backgroundColor: colorScheme.surface,
+                            shape: const RoundedRectangleBorder(
+                              borderRadius: BorderRadius.vertical(
+                                  top: Radius.circular(20)),
+                            ),
+                            builder: (context) {
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(
+                                    vertical: 20),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Text(
+                                      "Settings",
+                                      style: TextStyle(
+                                        fontFamily: 'Montserrat',
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 20,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 20),
+                                    ListTile(
+                                      leading: Icon(Icons.lock_outline,
+                                          color: colorScheme.primary),
+                                      title: const Text(
+                                          "Change Password"),
+                                      trailing: const Icon(
+                                          Icons.arrow_forward_ios,
+                                          size: 16),
+                                      onTap: () {
+                                        Navigator.pop(context);
+                                        _showChangePasswordDialog();
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          );
+                        },
+                      ),
+
                       _profileTile(
                         icon: Icons.logout,
                         label: 'Logout',
@@ -647,19 +819,24 @@ _profileTile(
                             context: context,
                             builder: (context) => AlertDialog(
                               title: const Text("Confirm Logout"),
-                              content: const Text("Are you sure you want to logout?"),
+                              content: const Text(
+                                  "Are you sure you want to logout?"),
                               actions: [
                                 TextButton(
-                                  onPressed: () => Navigator.pop(context),
+                                  onPressed: () =>
+                                      Navigator.pop(context),
                                   child: const Text("Cancel"),
                                 ),
                                 ElevatedButton(
                                   onPressed: () async {
-                                    await Supabase.instance.client.auth.signOut();
+                                    await Supabase.instance.client.auth
+                                        .signOut();
                                     if (context.mounted) {
                                       Navigator.pushAndRemoveUntil(
                                         context,
-                                        MaterialPageRoute(builder: (_) => const LoginPage()),
+                                        MaterialPageRoute(
+                                            builder: (_) =>
+                                                const LoginPage()),
                                         (route) => false,
                                       );
                                     }
@@ -686,6 +863,36 @@ _profileTile(
     );
   }
 
+  // ── ML info chip helper ─────────────────────────────────────────────
+  Widget _mlInfoChip(
+      String label, IconData icon, ColorScheme colorScheme) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: colorScheme.onSurface.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon,
+              size: 12, color: colorScheme.onSurface.withOpacity(0.6)),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontFamily: 'Montserrat',
+              fontSize: 11,
+              color: colorScheme.onSurface.withOpacity(0.6),
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Stat card ───────────────────────────────────────────────────────
   Widget _statCard({
     required String title,
     required String value,
@@ -694,7 +901,8 @@ _profileTile(
     required ColorScheme colorScheme,
   }) {
     return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       elevation: 3,
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -727,6 +935,7 @@ _profileTile(
     );
   }
 
+  // ── Profile tile ────────────────────────────────────────────────────
   Widget _profileTile({
     required IconData icon,
     required String label,
@@ -734,7 +943,8 @@ _profileTile(
     VoidCallback? onTap,
   }) {
     return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape:
+          RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       elevation: 3,
       margin: const EdgeInsets.symmetric(vertical: 8),
       child: ListTile(

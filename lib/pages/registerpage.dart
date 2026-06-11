@@ -1,3 +1,4 @@
+import 'package:Focentra/auth/authgate.dart';
 import 'package:flutter/material.dart';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -381,7 +382,7 @@ class _RegisterPageState extends State<RegisterPage> {
           // Clear stack and go to login
           Navigator.pushAndRemoveUntil(
             context,
-            MaterialPageRoute(builder: (_) => const LoginPage()),
+            MaterialPageRoute(builder: (_) => const Authgate()),
             (route) => false,
           );
         }

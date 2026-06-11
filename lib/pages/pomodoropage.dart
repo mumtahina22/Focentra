@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
-
+import '../services/ml_service.dart';
 import '../db/tasks_db.dart';
 import '../notification.dart';
 import '../widgets/left_panel.dart';
@@ -28,13 +28,17 @@ class _PomodoroState extends State<Pomodoro> {
   String completedMarks = "";
   Timer? timer;
   int workSessionsDone = 0; // sessions completed today
+  int _workMin = 25;
+  int _shortBreakMin = 5;
+  int _longBreakMin = 20;
 
   @override
   void initState() {
     super.initState();
     _initializeNotifications();
-    _loadWorkSessions();      // load today's sessions once
-    totalSeconds = WORK_MIN * 60;
+    _loadWorkSessions(); 
+    _loadMLSettings();       // load today's sessions once
+    totalSeconds = _workMin * 60;
     secondsRemaining = totalSeconds;
   }
 
@@ -45,6 +49,25 @@ class _PomodoroState extends State<Pomodoro> {
     });
   }
 
+  Future<void> _loadMLSettings() async {
+  final uid = taskdatabase.authservice.getcurrentUseruid();
+  if (uid == null) return;
+
+  final profile = await MLService.fetchMLProfile(uid);
+  final settings = MLService.getPomodoroSettings(profile);
+
+  if (mounted) {
+    setState(() {
+      _workMin = settings['work_min']!;
+      _shortBreakMin = settings['short_break_min']!;
+      _longBreakMin = settings['long_break_min']!;
+      // Reinitialize timer with ML settings
+      totalSeconds = _workMin * 60;
+      secondsRemaining = totalSeconds;
+    });
+  }
+}
+
   Future<void> _initializeNotifications() async {
     await LocalNotifications.init();
     await LocalNotifications.requestExactAlarmPermissionSafe();
@@ -54,7 +77,7 @@ class _PomodoroState extends State<Pomodoro> {
     reps++;
 
     if (reps % 8 == 0) {
-      totalSeconds = LONG_BREAK_MIN * 60;
+      totalSeconds = _longBreakMin * 60;
       currentLabel = "Break";
 
       // Notify long break start
@@ -65,7 +88,7 @@ class _PomodoroState extends State<Pomodoro> {
         payload: "break_start",
       );
     } else if (reps % 2 == 0) {
-      totalSeconds = SHORT_BREAK_MIN * 60;
+      totalSeconds = _shortBreakMin * 60;
       currentLabel = "Break";
 
       // Notify short break start
@@ -76,7 +99,7 @@ class _PomodoroState extends State<Pomodoro> {
         payload: "short_break_start",
       );
     } else {
-      totalSeconds = WORK_MIN * 60;
+      totalSeconds = _workMin * 60;
       currentLabel = "Work";
 
       // Notify work session start
@@ -113,8 +136,13 @@ class _PomodoroState extends State<Pomodoro> {
 
           if (currentLabel == "Work") {
             completedMarks = "✓" * ((reps / 2).floor());
-            taskdatabase.addWorkSession(); // save session to DB
-            _loadWorkSessions();           // update today's count
+            taskdatabase.addWorkSession();
+            _loadWorkSessions();
+            // Trigger ML prediction — fire and forget
+            final uid = taskdatabase.authservice.getcurrentUseruid();
+            if (uid != null) {
+              MLService.triggerPrediction(uid);
+            }      // update today's count
           }
 
           startTimer(); // start next session automatically
@@ -129,7 +157,7 @@ class _PomodoroState extends State<Pomodoro> {
     timer?.cancel();
     reps = 0;
     LocalNotifications.cancelAll();  // cancel all pending notifications
-    totalSeconds = WORK_MIN * 60;
+    totalSeconds = _workMin * 60;
     secondsRemaining = totalSeconds;
     currentLabel = "Timer";
     completedMarks = "";
