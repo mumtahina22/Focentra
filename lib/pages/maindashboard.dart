@@ -4,6 +4,7 @@ import 'onboarding_page.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../db/tasks_db.dart';
 import '../widgets/left_panel.dart';
+import '../services/archetype_cache.dart';
 
 class MainDashboard extends StatefulWidget {
   const MainDashboard({super.key});
@@ -24,9 +25,9 @@ class _MainDashboardState extends State<MainDashboard> {
   bool _mlLoaded = false;
   Map<String, dynamic>? _taskSuggestion;
 
-  final int maxDailyPoints = 100;
-  final int maxWeeklyPoints = 700;
-  final int maxMonthlyPoints = 3000;
+  int _assignedDaily   = 0;
+  int _assignedWeekly  = 0;
+  int _assignedMonthly = 0;
 
   late final Stream<dynamic> _taskStream;
 
@@ -36,6 +37,7 @@ class _MainDashboardState extends State<MainDashboard> {
     _fetchUserName();
     _loadPoints();
     _initML();
+    _loadAssignedPoints();
 
     final uid = tasksDatabase.authservice.getcurrentUseruid();
     if (uid != null) {
@@ -94,7 +96,43 @@ class _MainDashboardState extends State<MainDashboard> {
         workSessionsDone = s;
       });
     }
+    await _loadAssignedPoints();
   }
+
+  Future<void> _loadAssignedPoints() async {
+  final uid = tasksDatabase.authservice.getcurrentUseruid();
+  if (uid == null) return;
+  final tasks = await tasksDatabase.tasktable
+      .select('choose, points')
+      .eq('uid', uid);
+  int daily = 0, weekly = 0, monthly = 0;
+  for (final t in tasks) {
+    final pts = (t['points'] as int?) ?? 0;
+    switch (t['choose'] as String?) {
+      case 'Daily':   daily   += pts; break;
+      case 'Weekly':  weekly  += pts; break;
+      case 'Monthly': monthly += pts; break;
+    }
+  }
+  if (mounted) {
+    setState(() {
+      _assignedDaily   = daily;
+      _assignedWeekly  = weekly;
+      _assignedMonthly = monthly;
+    });
+  }
+}
+
+int _dynamicCap(int assigned, int baseCap) {
+  if (assigned <= baseCap) return baseCap;
+  final extra = assigned - baseCap;
+  final steps = (extra ~/ 50) + 1;
+  return baseCap + steps * 50;
+}
+
+int get _maxDaily   => _dynamicCap(_assignedDaily,   100);
+int get _maxWeekly  => _dynamicCap(_assignedWeekly,  700);
+int get _maxMonthly => _dynamicCap(_assignedMonthly, 3000);
 
 Future<void> _initML() async {
   final uid = tasksDatabase.authservice.getcurrentUseruid();
@@ -121,6 +159,13 @@ Future<void> _initML() async {
       _mlProfile = profile;
       _mlLoaded = true;
     });
+    if (profile != null) {
+    ArchetypeCache.set(
+      MLService.getArchetype(profile),
+      (profile['days_active'] as num?)?.toInt() ?? 0,
+    );
+  }
+
   }
 
   if (uid.isNotEmpty) _loadSuggestion(uid);
@@ -207,21 +252,21 @@ Future<void> _initML() async {
                             _buildProgressBar(
                               label: "Today",
                               points: todayPoints,
-                              maxPoints: maxDailyPoints,
+                              maxPoints: _maxDaily,
                               color: Colors.blueAccent,
                             ),
                             const SizedBox(height: 14),
                             _buildProgressBar(
                               label: "This Week",
                               points: weekPoints,
-                              maxPoints: maxWeeklyPoints,
+                              maxPoints: _maxWeekly,
                               color: Colors.green,
                             ),
                             const SizedBox(height: 14),
                             _buildProgressBar(
                               label: "This Month",
                               points: monthPoints,
-                              maxPoints: maxMonthlyPoints,
+                              maxPoints: _maxMonthly,
                               color: Colors.orange,
                             ),
                           ],

@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 
 import '../auth/authservice.dart';
 import '../db/tasks_db.dart';
+import '../services/archetype_cache.dart';
+import '../services/point_suggester.dart';
 import '../widgets/left_panel.dart';
- // Import the LeftPanel
 
 class TaskPage extends StatefulWidget {
   const TaskPage({super.key});
@@ -15,17 +16,20 @@ class TaskPage extends StatefulWidget {
 
 class _TaskPageState extends State<TaskPage>
     with SingleTickerProviderStateMixin {
-  final _taskController = TextEditingController();
-  final _titleController = TextEditingController();
+  final _taskController   = TextEditingController();
+  final _titleController  = TextEditingController();
   final _pointsController = TextEditingController();
-  final authservice = Authservice();
+  final authservice  = Authservice();
   final taskdatabase = tasksdb();
 
   final List<String> chooseList = ["Daily", "Weekly", "Monthly"];
   String choose = "Daily";
   late TabController _tabController;
 
-  Timer? _resetTimer;
+  // Per-tab assigned point totals
+  int _dailyAssigned   = 0;
+  int _weeklyAssigned  = 0;
+  int _monthlyAssigned = 0;
 
   final List<Color> cardColors = [
     Colors.purple.shade100,
@@ -40,40 +44,31 @@ class _TaskPageState extends State<TaskPage>
   void initState() {
     super.initState();
     _tabController = TabController(length: chooseList.length, vsync: this);
-    _startResetTimer();
-  }
-
-  void _startResetTimer() {
-    _resetTimer = Timer.periodic(const Duration(minutes: 1), (timer) async {
-      if (!mounted) return;
-      final now = DateTime.now();
-
-      if (now.hour == 0 && now.minute == 0) {
-        await taskdatabase.resetTasks("Daily");
-        await taskdatabase.updateResetLog('Daily');
-        
-        if (now.weekday == DateTime.friday) {
-          await taskdatabase.resetTasks("Weekly");
-          await taskdatabase.updateResetLog('Weekly');
-        }
-        
-        if (now.day == 30) {
-          await taskdatabase.resetTasks("Monthly");
-          await taskdatabase.updateResetLog('Monthly');
-        }
-      }
-    });
   }
 
   @override
   void dispose() {
-    _resetTimer?.cancel();
     _taskController.dispose();
     _titleController.dispose();
     _pointsController.dispose();
     _tabController.dispose();
     super.dispose();
   }
+
+  // ── Dynamic cap calculation ────────────────────────────────────
+  int _dynamicCap(int assigned, int baseCap, int step) {
+    if (assigned <= baseCap) return baseCap;
+    final extra = assigned - baseCap;
+    final steps = (extra ~/ step) + 1;
+    return baseCap + steps * step;
+  }
+
+  int get dynamicDailyCap =>
+      _dynamicCap(_dailyAssigned, 100, 50);
+  int get dynamicWeeklyCap =>
+      _dynamicCap(_weeklyAssigned, 700, 50);
+  int get dynamicMonthlyCap =>
+      _dynamicCap(_monthlyAssigned, 3000, 50);
 
   void addNewTask() {
     _taskController.clear();
@@ -85,110 +80,296 @@ class _TaskPageState extends State<TaskPage>
       context: context,
       builder: (context) {
         final colorScheme = Theme.of(context).colorScheme;
+        int? localSuggested;
+        String? localReason;
+
         return StatefulBuilder(
-          builder: (context, setDialogState) => AlertDialog(
-            backgroundColor: colorScheme.surface,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            title: Text(
-              "Add New Task",
-              style: TextStyle(color: colorScheme.onSurface),
-            ),
-            content: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: _titleController,
-                    decoration: InputDecoration(labelText: "Title"),
+          builder: (context, setDialogState) {
+
+            void updateInterval(String interval) {
+              setDialogState(() {
+                choose = interval;
+                localSuggested = null; // reset suggestion on interval change
+                localReason = null;
+              });
+            }
+
+            // Rule-based suggestion from the task text + archetype.
+            // Instant, no internet needed (see point_suggester.dart).
+            void onSuggestTapped() {
+              if (_titleController.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Please enter a task title first.'),
+                    duration: Duration(seconds: 2),
                   ),
-                  SizedBox(height: 12),
-                  TextField(
-                    controller: _taskController,
-                    maxLines: 2,
-                    decoration: InputDecoration(labelText: "Description"),
-                  ),
-                  SizedBox(height: 12),
-                  TextField(
-                    controller: _pointsController,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(labelText: "Points (1-100)"),
-                  ),
-                  SizedBox(height: 12),
-                  Row(
-                    children: chooseList.map((period) {
-                      final isSelected = choose == period;
-                      return Expanded(
-                        child: GestureDetector(
-                          onTap: () => setDialogState(() => choose = period),
+                );
+                return;
+              }
+              final suggestion = PointSuggester.suggest(
+                title: _titleController.text,
+                description: _taskController.text,
+                interval: choose,
+              );
+              setDialogState(() {
+                localSuggested = suggestion.points;
+                localReason = suggestion.reason;
+              });
+            }
+
+            return AlertDialog(
+              backgroundColor: colorScheme.surface,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: Text(
+                "Add New Task",
+                style: TextStyle(color: colorScheme.onSurface),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+
+                    // Title
+                    TextField(
+                      controller: _titleController,
+                      decoration:
+                          const InputDecoration(labelText: "Title"),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Description
+                    TextField(
+                      controller: _taskController,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                          labelText: "Description (optional)"),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Points field
+                    TextField(
+                      controller: _pointsController,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText:
+                            "Points (1-${ArchetypeCache.maxPointsForTask(choose)})",
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+
+                    // ── AI Suggest button + chip ───────────────
+                    Row(
+                      children: [
+                        // Suggest button
+                        GestureDetector(
+                          onTap: onSuggestTapped,
                           child: Container(
-                            padding: EdgeInsets.symmetric(vertical: 12),
-                            margin: EdgeInsets.symmetric(horizontal: 2),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
                             decoration: BoxDecoration(
-                              color: isSelected
-                                  ? colorScheme.primary
-                                  : Colors.transparent,
-                              borderRadius: BorderRadius.circular(12),
+                              color: colorScheme.primary,
+                              borderRadius: BorderRadius.circular(20),
                             ),
-                            child: Text(
-                              period,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontWeight: isSelected
-                                    ? FontWeight.bold
-                                    : FontWeight.normal,
-                                color: isSelected
-                                    ? colorScheme.onPrimary
-                                    : colorScheme.onSurfaceVariant,
+                            child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Text(
+                                        '✨',
+                                        style: const TextStyle(
+                                            fontSize: 14),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Suggest Points',
+                                        style: TextStyle(
+                                          fontFamily: 'Montserrat',
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: colorScheme.onPrimary,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                          ),
+                        ),
+
+                        // Suggestion chip with accept
+                        if (localSuggested != null) ...[
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 10, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: colorScheme.primaryContainer
+                                    .withOpacity(0.5),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: colorScheme.primary
+                                      .withOpacity(0.3),
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    '${ArchetypeCache.emoji} $localSuggested pts',
+                                    style: TextStyle(
+                                      fontFamily: 'Montserrat',
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: colorScheme.primary,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  GestureDetector(
+                                    onTap: () {
+                                      setDialogState(() {
+                                        _pointsController.text =
+                                            localSuggested.toString();
+                                      });
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(
+                                          horizontal: 6, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: colorScheme.primary,
+                                        borderRadius:
+                                            BorderRadius.circular(10),
+                                      ),
+                                      child: Text(
+                                        'Use',
+                                        style: TextStyle(
+                                          fontFamily: 'Montserrat',
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w700,
+                                          color: colorScheme.onPrimary,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ),
+                        ],
+                      ],
+                    ),
+
+                    // Why this number was suggested
+                    if (localReason != null) ...[
+                      const SizedBox(height: 6),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          localReason!,
+                          style: TextStyle(
+                            fontFamily: 'Montserrat',
+                            fontSize: 11,
+                            color: colorScheme.onSurfaceVariant,
+                          ),
                         ),
-                      );
-                    }).toList(),
-                  ),
-                ],
+                      ),
+                    ],
+
+                    const SizedBox(height: 12),
+
+                    // Interval selector
+                    Row(
+                      children: chooseList.map((period) {
+                        final isSelected = choose == period;
+                        return Expanded(
+                          child: GestureDetector(
+                            onTap: () => updateInterval(period),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 12),
+                              margin: const EdgeInsets.symmetric(
+                                  horizontal: 2),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? colorScheme.primary
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                              child: Text(
+                                period,
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  fontWeight: isSelected
+                                      ? FontWeight.bold
+                                      : FontWeight.normal,
+                                  color: isSelected
+                                      ? colorScheme.onPrimary
+                                      : colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: Text("Cancel"),
-              ),
-              ElevatedButton(
-                onPressed: () async {
-                  if (_titleController.text.isNotEmpty &&
-                      _taskController.text.isNotEmpty &&
-                      _pointsController.text.isNotEmpty) {
-                    final points =
-                        int.tryParse(_pointsController.text)?.clamp(1, 100) ??
-                        10;
-                    try {
-                      await taskdatabase.inserttask(
-                        _taskController.text,
-                        _titleController.text,
-                        choose,
-                        points,
-                      );
-                      if (mounted) Navigator.pop(context);
-                    } catch (e) {
-                      print("Error adding task: $e");
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text("Cancel"),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (_titleController.text.isNotEmpty &&
+                        _taskController.text.isNotEmpty ||
+                        _titleController.text.isNotEmpty) {
+                      final maxPts =
+                          ArchetypeCache.maxPointsForTask(choose);
+                      final points =
+                          int.tryParse(_pointsController.text)
+                              ?.clamp(1, maxPts) ??
+                          localSuggested ??
+                          PointSuggester.suggest(
+                            title: _titleController.text,
+                            description: _taskController.text,
+                            interval: choose,
+                          ).points;
+                      try {
+                        await taskdatabase.inserttask(
+                          _taskController.text,
+                          _titleController.text,
+                          choose,
+                          points,
+                        );
+                        if (mounted) Navigator.pop(context);
+                      } catch (e) {
+                        print("Error adding task: $e");
+                      }
                     }
-                  }
-                },
-                child: Text("Add Task"),
-              ),
-            ],
-          ),
+                  },
+                  child: const Text("Add Task"),
+                ),
+              ],
+            );
+          },
         );
       },
     );
   }
 
-  void toggleDone(dynamic id, bool done, int points) async {
-    await taskdatabase.toggleDone(id, done);
-    if (done) await taskdatabase.addPointsLog(id, points);
+  void toggleDone(
+    dynamic id,
+    bool done,
+    int points,
+    String taskInterval,
+  ) async {
+    await taskdatabase.toggleDone(
+      id,
+      done,
+      taskInterval: taskInterval,
+      basePoints: done ? points : 0,
+    );
   }
 
   @override
@@ -222,17 +403,11 @@ class _TaskPageState extends State<TaskPage>
         body: SafeArea(
           child: Row(
             children: [
-              // LEFT PANEL
-              //const LeftPanel(currentPage: 'Tasks'),
-              
-              // RIGHT PANEL (Tasks content)
               Expanded(
                 child: Column(
                   children: [
-                    // Page Title
                     Container(
                       padding: const EdgeInsets.all(24),
-                      alignment: Alignment.centerLeft,
                       child: Center(
                         child: Text(
                           'Tasks & Habits',
@@ -245,25 +420,29 @@ class _TaskPageState extends State<TaskPage>
                         ),
                       ),
                     ),
-                    
+
                     // Tab Bar
                     Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 24),
+                      margin:
+                          const EdgeInsets.symmetric(horizontal: 24),
                       decoration: BoxDecoration(
                         color: colorScheme.surfaceVariant,
                         borderRadius: BorderRadius.circular(12),
                       ),
                       child: TabBar(
                         controller: _tabController,
-                        tabs: chooseList.map((c) => Tab(text: c)).toList(),
+                        tabs: chooseList
+                            .map((c) => Tab(text: c))
+                            .toList(),
                         labelColor: colorScheme.primary,
-                        unselectedLabelColor: colorScheme.onSurfaceVariant,
+                        unselectedLabelColor:
+                            colorScheme.onSurfaceVariant,
                         indicatorColor: colorScheme.primary,
                         indicatorSize: TabBarIndicatorSize.tab,
                         dividerColor: Colors.transparent,
                       ),
                     ),
-                    
+
                     // Tab Bar View
                     Expanded(
                       child: TabBarView(
@@ -274,200 +453,418 @@ class _TaskPageState extends State<TaskPage>
                                 .stream(primaryKey: ['id'])
                                 .eq('uid', uid!),
                             builder: (context, snapshot) {
-                              if (!snapshot.hasData)
-                                return Center(child: CircularProgressIndicator());
+                              if (!snapshot.hasData) {
+                                return const Center(
+                                    child:
+                                        CircularProgressIndicator());
+                              }
                               final allTasks = snapshot.data!;
                               final tasks = allTasks
-                                  .where((t) => t['choose'] == category)
+                                  .where(
+                                      (t) => t['choose'] == category)
                                   .toList();
-                              if (tasks.isEmpty) {
-                                return Center(
-                                  child: Column(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Icon(
-                                        Icons.task_alt,
-                                        size: 64,
-                                        color: colorScheme.onSurfaceVariant,
-                                      ),
-                                      const SizedBox(height: 16),
-                                      Text(
-                                        "No tasks in $category",
-                                        style: TextStyle(
-                                          fontSize: 18,
-                                          color: colorScheme.onSurfaceVariant,
-                                          fontFamily: 'Montserrat',
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              }
 
-                              return ListView.builder(
-                                padding: const EdgeInsets.all(24),
-                                itemCount: tasks.length,
-                                itemBuilder: (context, index) {
-                                  final task = tasks[index];
-                                  final id = task['id'];
-                                  final title = task['title'] ?? '';
-                                  final content = task['content'] ?? '';
-                                  final points = task['points'] ?? 10;
-                                  final done = task['done'] ?? false;
-                                  final cardColor = cardColors[index % cardColors.length];
+                              // ── Compute assigned points total ──
+                              final totalAssigned = tasks.fold<int>(
+                                0,
+                                (sum, t) =>
+                                    sum + ((t['points'] as int?) ?? 0),
+                              );
 
-                                  return Card(
-                                    color: cardColor,
-                                    margin: const EdgeInsets.only(bottom: 12),
-                                    shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(12),
+                              // Update state for dynamic caps
+                              // Only redraw when the total actually
+                              // changed, otherwise this loops forever.
+                              WidgetsBinding.instance
+                                  .addPostFrameCallback((_) {
+                                if (!mounted) return;
+                                final previous = category == 'Daily'
+                                    ? _dailyAssigned
+                                    : category == 'Weekly'
+                                        ? _weeklyAssigned
+                                        : _monthlyAssigned;
+                                if (previous == totalAssigned) return;
+                                setState(() {
+                                  if (category == 'Daily') {
+                                    _dailyAssigned = totalAssigned;
+                                  } else if (category == 'Weekly') {
+                                    _weeklyAssigned = totalAssigned;
+                                  } else {
+                                    _monthlyAssigned = totalAssigned;
+                                  }
+                                });
+                              });
+
+                              // Cap for this category
+                              final baseCap = category == 'Daily'
+                                  ? 100
+                                  : category == 'Weekly'
+                                      ? 700
+                                      : 3000;
+                              final dynCap = _dynamicCap(
+                                  totalAssigned, baseCap, 50);
+
+                              return Column(
+                                children: [
+                                  // ── Points counter bar ─────
+                                  Container(
+                                    margin: const EdgeInsets.fromLTRB(
+                                        24, 16, 24, 0),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 16, vertical: 12),
+                                    decoration: BoxDecoration(
+                                      color: colorScheme.surfaceVariant
+                                          .withOpacity(0.5),
+                                      borderRadius:
+                                          BorderRadius.circular(12),
                                     ),
-                                    elevation: 2,
-                                    child: ListTile(
-                                      contentPadding: const EdgeInsets.all(10),
-                                      leading: Checkbox(
-                                        value: done,
-                                        onChanged: (value) {
-                                          setState(() {});
-                                          toggleDone(id, value ?? false, points);
-                                        }
-                                      ),
-                                      title: Text(
-                                        title,
-                                        style: TextStyle(
-                                          fontFamily: 'Montserrat',
-                                          fontWeight: FontWeight.w600,
-                                          decoration: done 
-                                              ? TextDecoration.lineThrough
-                                              : null,
-                                        ),
-                                      ),
-                                      subtitle: content.isNotEmpty 
-                                          ? Text(
-                                              content,
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment:
+                                              MainAxisAlignment
+                                                  .spaceBetween,
+                                          children: [
+                                            Text(
+                                              '$category Tasks',
                                               style: TextStyle(
                                                 fontFamily: 'Montserrat',
-                                                decoration: done 
-                                                    ? TextDecoration.lineThrough
-                                                    : null,
+                                                fontWeight:
+                                                    FontWeight.w600,
+                                                fontSize: 13,
+                                                color: colorScheme
+                                                    .onSurface
+                                                    .withOpacity(0.7),
                                               ),
-                                            ) 
-                                          : null,
-                                      trailing: Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 8, vertical: 4),
-                                            decoration: BoxDecoration(
-                                              color: colorScheme.primaryContainer,
-                                              borderRadius: BorderRadius.circular(8),
                                             ),
-                                            child: Text(
-                                              "$points pts",
+                                            Text(
+                                              '$totalAssigned / $dynCap pts assigned',
                                               style: TextStyle(
                                                 fontFamily: 'Montserrat',
-                                                fontWeight: FontWeight.w600,
-                                                color: colorScheme.onPrimaryContainer,
+                                                fontWeight:
+                                                    FontWeight.w700,
+                                                fontSize: 13,
+                                                color: totalAssigned >
+                                                        baseCap
+                                                    ? Colors.orange
+                                                    : colorScheme
+                                                        .primary,
                                               ),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 8),
+                                        ClipRRect(
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                          child: LinearProgressIndicator(
+                                            value: dynCap > 0
+                                                ? (totalAssigned /
+                                                        dynCap)
+                                                    .clamp(0.0, 1.0)
+                                                : 0,
+                                            minHeight: 8,
+                                            backgroundColor: colorScheme
+                                                .primary
+                                                .withOpacity(0.12),
+                                            valueColor:
+                                                AlwaysStoppedAnimation<Color>(
+                                              totalAssigned > baseCap
+                                                  ? Colors.orange
+                                                  : colorScheme.primary,
                                             ),
                                           ),
-                                          //const SizedBox(width: 5),
-                                          // Edit Button
-                                          IconButton(
-                                            icon: Icon(Icons.edit, color: Colors.blue),
-                                            onPressed: () {
-                                              _titleController.text = title;
-                                              _taskController.text = content;
-                                              _pointsController.text = points.toString();
-                                              choose = task['choose'];
+                                        ),
+                                        if (totalAssigned > baseCap) ...[
+                                          const SizedBox(height: 6),
+                                          Text(
+                                            '⚠️ Exceeds base cap — progress bar auto-adjusted to $dynCap pts',
+                                            style: TextStyle(
+                                              fontFamily: 'Montserrat',
+                                              fontSize: 10,
+                                              color: Colors.orange
+                                                  .withOpacity(0.8),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ),
+                                  ),
 
-                                              showDialog(
-                                                context: context,
-                                                builder: (context) {
-                                                  return StatefulBuilder(
-                                                    builder: (context, setDialogState) =>
-                                                        AlertDialog(
-                                                          title: Text("Edit Task"),
-                                                          content: Column(
-                                                            mainAxisSize: MainAxisSize.min,
-                                                            children: [
-                                                              TextField(
-                                                                controller: _titleController,
-                                                                decoration: InputDecoration(
-                                                                  labelText: "Title",
-                                                                ),
+                                  // ── Task list ──────────────
+                                  Expanded(
+                                    child: tasks.isEmpty
+                                        ? Center(
+                                            child: Column(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment
+                                                      .center,
+                                              children: [
+                                                Icon(Icons.task_alt,
+                                                    size: 64,
+                                                    color: colorScheme
+                                                        .onSurfaceVariant),
+                                                const SizedBox(
+                                                    height: 16),
+                                                Text(
+                                                  "No tasks in $category",
+                                                  style: TextStyle(
+                                                    fontSize: 18,
+                                                    color: colorScheme
+                                                        .onSurfaceVariant,
+                                                    fontFamily:
+                                                        'Montserrat',
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          )
+                                        : ListView.builder(
+                                            padding:
+                                                const EdgeInsets.all(24),
+                                            itemCount: tasks.length,
+                                            itemBuilder:
+                                                (context, index) {
+                                              final task = tasks[index];
+                                              final id = task['id'];
+                                              final title =
+                                                  task['title'] ?? '';
+                                              final content =
+                                                  task['content'] ?? '';
+                                              final points =
+                                                  task['points'] ?? 10;
+                                              final done =
+                                                  task['done'] ?? false;
+                                              final taskInterval =
+                                                  task['choose'] ??
+                                                      'Daily';
+                                              final cardColor = cardColors[
+                                                  index %
+                                                      cardColors.length];
+                                              final archetypeEmoji =
+                                                  ArchetypeCache.hasData
+                                                      ? ArchetypeCache
+                                                          .emoji
+                                                      : '';
+
+                                              return Card(
+                                                color: cardColor,
+                                                margin: const EdgeInsets
+                                                    .only(bottom: 12),
+                                                shape:
+                                                    RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius
+                                                          .circular(12),
+                                                ),
+                                                elevation: 2,
+                                                child: ListTile(
+                                                  contentPadding:
+                                                      const EdgeInsets
+                                                          .all(10),
+                                                  leading: Checkbox(
+                                                    value: done,
+                                                    onChanged: (value) {
+                                                      toggleDone(
+                                                        id,
+                                                        value ?? false,
+                                                        points,
+                                                        taskInterval,
+                                                      );
+                                                    },
+                                                  ),
+                                                  title: Text(
+                                                    title,
+                                                    style: TextStyle(
+                                                      fontFamily:
+                                                          'Montserrat',
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                      decoration: done
+                                                          ? TextDecoration
+                                                              .lineThrough
+                                                          : null,
+                                                    ),
+                                                  ),
+                                                  subtitle:
+                                                      content.isNotEmpty
+                                                          ? Text(
+                                                              content,
+                                                              style:
+                                                                  TextStyle(
+                                                                fontFamily:
+                                                                    'Montserrat',
+                                                                decoration: done
+                                                                    ? TextDecoration
+                                                                        .lineThrough
+                                                                    : null,
                                                               ),
-                                                              TextField(
-                                                                controller: _taskController,
-                                                                decoration: InputDecoration(
-                                                                  labelText: "Description",
-                                                                ),
-                                                              ),
-                                                              TextField(
-                                                                controller: _pointsController,
-                                                                keyboardType:
-                                                                    TextInputType.number,
-                                                                decoration: InputDecoration(
-                                                                  labelText: "Points",
-                                                                ),
-                                                              ),
-                                                            ],
-                                                          ),
-                                                          actions: [
-                                                            TextButton(
-                                                              onPressed: () =>
-                                                                  Navigator.pop(context),
-                                                              child: Text("Cancel"),
-                                                            ),
-                                                            ElevatedButton(
-                                                              onPressed: () async {
-                                                                final updatedPoints =
-                                                                    int.tryParse(
-                                                                      _pointsController.text,
-                                                                    )?.clamp(1, 100) ??
-                                                                    10;
-                                                                await taskdatabase.updatetask(
-                                                                  id,
-                                                                  _taskController.text,
-                                                                  _titleController.text,
-                                                                  choose,
-                                                                  updatedPoints,
-                                                                );
-                                                                if (mounted)
-                                                                  Navigator.pop(context);
-                                                              },
-                                                              child: Text("Update"),
-                                                            ),
-                                                          ],
+                                                            )
+                                                          : null,
+                                                  trailing: Row(
+                                                    mainAxisSize:
+                                                        MainAxisSize.min,
+                                                    children: [
+                                                      // Points badge
+                                                      Container(
+                                                        padding: const EdgeInsets
+                                                            .symmetric(
+                                                            horizontal: 8,
+                                                            vertical: 4),
+                                                        decoration:
+                                                            BoxDecoration(
+                                                          color: colorScheme
+                                                              .primaryContainer,
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(
+                                                                      8),
                                                         ),
-                                                  );
-                                                },
+                                                        child: Text(
+                                                          archetypeEmoji
+                                                                  .isNotEmpty
+                                                              ? '$archetypeEmoji $points pts'
+                                                              : '$points pts',
+                                                          style: TextStyle(
+                                                            fontFamily:
+                                                                'Montserrat',
+                                                            fontWeight:
+                                                                FontWeight
+                                                                    .w600,
+                                                            fontSize: 12,
+                                                            color: colorScheme
+                                                                .onPrimaryContainer,
+                                                          ),
+                                                        ),
+                                                      ),
+
+                                                      // Edit button
+                                                      IconButton(
+                                                        icon: const Icon(
+                                                            Icons.edit,
+                                                            color: Colors
+                                                                .blue),
+                                                        onPressed: () {
+                                                          _titleController
+                                                              .text = title;
+                                                          _taskController
+                                                              .text = content;
+                                                          _pointsController
+                                                                  .text =
+                                                              points
+                                                                  .toString();
+                                                          choose =
+                                                              task['choose'];
+                                                          showDialog(
+                                                            context:
+                                                                context,
+                                                            builder:
+                                                                (context) {
+                                                              return StatefulBuilder(
+                                                                builder: (context,
+                                                                        setDialogState) =>
+                                                                    AlertDialog(
+                                                                  title: const Text(
+                                                                      "Edit Task"),
+                                                                  content:
+                                                                      Column(
+                                                                    mainAxisSize:
+                                                                        MainAxisSize.min,
+                                                                    children: [
+                                                                      TextField(
+                                                                        controller:
+                                                                            _titleController,
+                                                                        decoration: const InputDecoration(
+                                                                            labelText:
+                                                                                "Title"),
+                                                                      ),
+                                                                      TextField(
+                                                                        controller:
+                                                                            _taskController,
+                                                                        decoration: const InputDecoration(
+                                                                            labelText:
+                                                                                "Description"),
+                                                                      ),
+                                                                      TextField(
+                                                                        controller:
+                                                                            _pointsController,
+                                                                        keyboardType:
+                                                                            TextInputType.number,
+                                                                        decoration: const InputDecoration(
+                                                                            labelText:
+                                                                                "Points"),
+                                                                      ),
+                                                                    ],
+                                                                  ),
+                                                                  actions: [
+                                                                    TextButton(
+                                                                      onPressed: () =>
+                                                                          Navigator.pop(context),
+                                                                      child: const Text(
+                                                                          "Cancel"),
+                                                                    ),
+                                                                    ElevatedButton(
+                                                                      onPressed:
+                                                                          () async {
+                                                                        final maxPts = ArchetypeCache.maxPointsForTask(choose);
+                                                                        final updatedPoints = int.tryParse(_pointsController.text)?.clamp(1, maxPts) ?? 10;
+                                                                        await taskdatabase.updatetask(
+                                                                          id,
+                                                                          _taskController.text,
+                                                                          _titleController.text,
+                                                                          choose,
+                                                                          updatedPoints,
+                                                                        );
+                                                                        if (mounted) Navigator.pop(context);
+                                                                      },
+                                                                      child: const Text(
+                                                                          "Update"),
+                                                                    ),
+                                                                  ],
+                                                                ),
+                                                              );
+                                                            },
+                                                          );
+                                                        },
+                                                      ),
+
+                                                      // Delete button
+                                                      IconButton(
+                                                        icon: const Icon(
+                                                            Icons.delete,
+                                                            color:
+                                                                Colors.red),
+                                                        onPressed:
+                                                            () async {
+                                                          try {
+                                                            final taskId =
+                                                                task['id'];
+                                                            await taskdatabase
+                                                                .deletetask(
+                                                              taskId is int
+                                                                  ? taskId
+                                                                  : int.parse(
+                                                                      taskId.toString()),
+                                                            );
+                                                            if (mounted) {
+                                                              setState(
+                                                                  () {});
+                                                            }
+                                                          } catch (e) {
+                                                            print(
+                                                                "Error deleting task: $e");
+                                                          }
+                                                        },
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ),
                                               );
                                             },
                                           ),
-                                          // Delete Button
-                                          IconButton(
-                                            icon: Icon(Icons.delete, color: Colors.red),
-                                            onPressed: () async {
-                                              try {
-                                                final taskId = task['id'];
-                                                await taskdatabase.deletetask(
-                                                  taskId is int
-                                                      ? taskId
-                                                      : int.parse(taskId.toString()),
-                                                );
-                                                if (mounted) setState(() {}); // refresh UI
-                                              } catch (e) {
-                                                print("Error deleting task: $e");
-                                              }
-                                            },
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                },
+                                  ),
+                                ],
                               );
                             },
                           );
@@ -480,7 +877,6 @@ class _TaskPageState extends State<TaskPage>
             ],
           ),
         ),
-        // Floating Action Button
         floatingActionButton: FloatingActionButton(
           onPressed: addNewTask,
           backgroundColor: colorScheme.primary,

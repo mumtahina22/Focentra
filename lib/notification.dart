@@ -134,7 +134,7 @@ class LocalNotifications {
   static bool _isRequestingPermission = false;
 
   static void onNotificationTap(NotificationResponse notificationResponse) {
-    onClickNotification.add(notificationResponse.payload!);
+    onClickNotification.add(notificationResponse.payload ?? '');
   }
 
   static Future<void> requestExactAlarmPermissionSafe() async {

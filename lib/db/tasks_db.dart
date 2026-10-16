@@ -1,5 +1,4 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../services/ml_service.dart';
 import '../auth/authservice.dart';
 
 class tasksdb {
@@ -51,21 +50,6 @@ Future<void> toggleDone(dynamic taskid, bool done, {
   await tasktable.update({'done': done}).eq('id', taskid);
   if (done == true) {
     await calculateAndIncrementStreak();
-
-    // Get ML-adjusted points if base points provided
-    if (basePoints > 0) {
-      final uid = authservice.getcurrentUseruid();
-      if (uid != null) {
-        final adjustedPoints = await MLService.getAdjustedPoints(
-          uid: uid,
-          basePoints: basePoints,
-          taskInterval: taskInterval,
-        );
-        await addPointsLog(taskid, adjustedPoints);
-        return;
-      }
-    }
-    // Fallback — log base points directly
     if (basePoints > 0) {
       await addPointsLog(taskid, basePoints);
     }
